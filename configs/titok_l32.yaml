@@ -1,0 +1,29 @@
+experiment:
+    tokenizer_checkpoint: "tokenizer_titok_l32.bin"
+    generator_checkpoint: "generator_titok_l32.bin"
+
+model:
+    vq_model:
+        codebook_size: 4096
+        token_size: 12
+        use_l2_norm: True
+        commitment_cost: 0.25
+        # vit arch
+        vit_enc_model_size: "large"
+        vit_dec_model_size: "large"
+        vit_enc_patch_size: 16
+        vit_dec_patch_size: 16
+        num_latent_tokens: 32
+    
+    generator:
+        dropout: 0.1
+        attn_drop: 0.1
+        num_steps: 8
+        mask_schedule_strategy: "arccos"
+        class_label_dropout: 0.1
+        image_seq_len: ${model.vq_model.num_latent_tokens}
+        condition_num_classes: 1000
+
+dataset:
+    preprocessing:
+        crop_size: 256

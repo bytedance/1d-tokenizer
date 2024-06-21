@@ -1,0 +1,11 @@
+torch>=2.0.0
+torchvision
+omegaconf
+transformers
+timm
+open_clip_torch
+einops
+scipy
+pillow
+accelerate
+gdown
