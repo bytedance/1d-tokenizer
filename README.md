@@ -4,7 +4,7 @@
 
 [![demo](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Online_Demo-blue)](https://huggingface.co/spaces/fun-research/TiTok)&nbsp;&nbsp;
 [![Website](https://img.shields.io/badge/Project-Website-87CEEB)](https://yucornetto.github.io/projects/titok.html)&nbsp;&nbsp;
-[![paper](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/)&nbsp;&nbsp;
+[![paper](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2406.07550)&nbsp;&nbsp;
 
 </div>
 
@@ -29,10 +29,10 @@ We present a compact 1D tokenizer which can represent an image with as few as 32
 ## Model Zoo
 | Dataset  | Model | Link | FID |
 | ------------- | ------------- | ------------- | ------------- |
-| ImageNet  | TiTok-L-32 Tokenizer | [checkpoint](https://drive.google.com/file/d/1I_m2Vm4JgQsa7bZVORj-nVhP8fgQLngd/view?usp=sharing)| 2.21 (reconstruction) |
+| ImageNet  | TiTok-L-32 Tokenizer | [checkpoint](https://drive.google.com/file/d/1I_m2Vm4JgQsa7bZVORj-nVhP8fgQLngd/view?usp=sharing), [hf model](https://huggingface.co/fun-research/TiTok/blob/main/tokenizer_titok_l32.bin)| 2.21 (reconstruction) |
 | ImageNet  | TiTok-B-64 Tokenizer | TODO | 1.70 (reconstruction) |
 | ImageNet  | TiTok-S-128 Tokenizer | TODO | 1.71 (reconstruction) |
-| ImageNet  | TiTok-L-32 Generator | [checkpoint](https://drive.google.com/file/d/1IgqZ_vwGIj2ZWOPuCzilxeQ2UrMVY93l/view?usp=sharing) | 2.77 (generation) |
+| ImageNet  | TiTok-L-32 Generator | [checkpoint](https://drive.google.com/file/d/1IgqZ_vwGIj2ZWOPuCzilxeQ2UrMVY93l/view?usp=sharing), [hf model](https://huggingface.co/fun-research/TiTok/blob/main/generator_titok_l32.bin) | 2.77 (generation) |
 | ImageNet  | TiTok-B-64 Generator | TODO | 2.48 (generation) |
 | ImageNet  | TiTok-S-128 Generator | TODO | 1.97 (generation) |
 
