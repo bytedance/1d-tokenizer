@@ -45,7 +45,54 @@ pip3 install -r requirements.txt
 
 ## Get Started
 
-We provide a [jupyter notebook](demo.ipynb) for a quick tutorial on reconstructing and generating images with TiTok-L-32.
+```python
+import torch
+from PIL import Image
+import numpy as np
+import demo_util
+from huggingface_hub import hf_hub_download
+
+# downloads TiTok-L-32 from hf
+hf_hub_download(repo_id="fun-research/TiTok", filename="tokenizer_titok_l32.bin", local_dir="./")
+hf_hub_download(repo_id="fun-research/TiTok", filename="generator_titok_l32.bin", local_dir="./")
+
+# load config
+config = demo_util.get_config("configs/titok_l32.yaml")
+titok_tokenizer = demo_util.get_titok_tokenizer(config)
+titok_generator = demo_util.get_titok_generator(config)
+
+device = "cuda"
+titok_tokenizer = titok_tokenizer.to(device)
+titok_generator = titok_generator.to(device)
+
+# reconstruct an image. I.e., image -> 32 tokens -> image
+img_path = "assets/ILSVRC2012_val_00010240.png"
+image = torch.from_numpy(np.array(Image.open(img_path)).astype(np.float32)).permute(2, 0, 1).unsqueeze(0) / 255.0
+# tokenization
+encoded_tokens = titok_tokenizer.encode(image.to(device))[1]["min_encoding_indices"]
+# image assets/ILSVRC2012_val_00010240.png is encoded into tokens tensor([[[ 887, 3979,  349,  720, 2809, 2743, 2101,  603, 2205, 1508, 1891, 4015, 1317, 2956, 3774, 2296,  484, 2612, 3472, 2330, 3140, 3113, 1056, 3779,  654, 2360, 1901, 2908, 2169,  953, 1326, 2598]]], device='cuda:0'), with shape torch.Size([1, 1, 32])
+print(f"image {img_path} is encoded into tokens {encoded_tokens}, with shape {encoded_tokens.shape}")
+# de-tokenization
+reconstructed_image = titok_tokenizer.decode_tokens(encoded_tokens)
+reconstructed_image = torch.clamp(reconstructed_image, 0.0, 1.0)
+reconstructed_image = (reconstructed_image * 255.0).permute(0, 2, 3, 1).to("cpu", dtype=torch.uint8).numpy()[0]
+reconstructed_image = Image.fromarray(reconstructed_image).save("assets/ILSVRC2012_val_00010240_recon.png")
+
+# generate an image
+sample_labels = [torch.randint(0, 999, size=(1,)).item()] # random IN-1k class
+generated_image = demo_util.sample_fn(
+    generator=titok_generator,
+    tokenizer=titok_tokenizer,
+    labels=sample_labels,
+    guidance_scale=4.5,
+    randomize_temperature=1.0,
+    num_sample_steps=8,
+    device=device
+)
+Image.fromarray(generated_image[0]).save(f"assets/generated_{sample_labels[0]}.png")
+```
+
+We also provide a [jupyter notebook](demo.ipynb) for a quick tutorial on reconstructing and generating images with TiTok-L-32.
 
 We also support TiTok with [HuggingFace 🤗 Demo](https://huggingface.co/spaces/fun-research/TiTok)!
 
