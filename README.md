@@ -96,6 +96,14 @@ We also provide a [jupyter notebook](demo.ipynb) for a quick tutorial on reconst
 
 We also support TiTok with [HuggingFace 🤗 Demo](https://huggingface.co/spaces/fun-research/TiTok)!
 
+## Testing on ImageNet-1K Benchmark
+
+We provide a [sampling script](./sample_imagenet.py) for reproducing the generation results on ImageNet-1K benchmark.
+```python
+torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet.py
+```
+
+Afterwards, evaluate the obtained npz file with [ADM script](https://github.com/openai/guided-diffusion/tree/main/evaluations). You should have expect a FID score around 2.77
 ## Visualizations
 <p>
 <img src="assets/recon_w_model_size_num_token.png" alt="teaser" width=90% height=90%>
