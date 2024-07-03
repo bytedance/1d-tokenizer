@@ -82,12 +82,14 @@ class ImageBert(nn.Module):
     def generate(self,
                  condition,
                  guidance_scale=3.0,
+                 guidance_decay=False,
                  randomize_temperature=4.5,
+                 softmax_temperature_annealing=False,
                  num_sample_steps=8):
         device = condition.device
         ids = torch.full((condition.shape[0], self.image_seq_len),
                           self.mask_token_id, device=device)
-        cfg_scale =  guidance_scale
+        cfg_scale = 0. if guidance_decay else guidance_scale
 
         for step in range(num_sample_steps):
             ratio = 1. * (step + 1) / num_sample_steps
@@ -105,6 +107,11 @@ class ImageBert(nn.Module):
                 logits = self.forward(
                     ids, condition, cond_drop_prob=0.0
                 )
+
+            if softmax_temperature_annealing:
+                softmax_temperature = 0.5 + 0.8 * (1 - ratio)
+                logits = logits / softmax_temperature
+
             # Add gumbel noise
             def log(t, eps=1e-20):
                 return torch.log(t.clamp(min=eps))
@@ -135,4 +142,6 @@ class ImageBert(nn.Module):
             else:
                 ids = torch.where(masking, self.mask_token_id, sampled_ids)
 
+            if guidance_decay:
+                cfg_scale = ratio * guidance_scale
         return ids
