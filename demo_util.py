@@ -54,7 +54,9 @@ def sample_fn(generator,
               tokenizer,
               labels=None,
               guidance_scale=3.0,
+              guidance_decay=False,
               randomize_temperature=2.0,
+              softmax_temperature_annealing=False,
               num_sample_steps=8,
               device="cuda"):
     generator.eval()
@@ -63,12 +65,15 @@ def sample_fn(generator,
         # goldfish, chicken, tiger, cat, hourglass, ship, dog, race car, airliner, teddy bear, random
         labels = [1, 7, 282, 604, 724, 179, 751, 404, 850, torch.randint(0, 999, size=(1,))]
 
-    labels = torch.LongTensor(labels).to(device)
+    if not isinstance(labels, torch.Tensor):
+        labels = torch.LongTensor(labels).to(device)
 
     generated_tokens = generator.generate(
         condition=labels,
         guidance_scale=guidance_scale,
+        guidance_decay=guidance_decay,
         randomize_temperature=randomize_temperature,
+        softmax_temperature_annealing=softmax_temperature_annealing,
         num_sample_steps=num_sample_steps)
     
     generated_image = tokenizer.decode_tokens(
