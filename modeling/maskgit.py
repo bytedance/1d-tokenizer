@@ -26,7 +26,10 @@ import math
 import torch.utils.checkpoint
 from transformers import BertConfig, BertModel
 
+import json
 from huggingface_hub import PyTorchModelHubMixin
+from omegaconf import OmegaConf
+from pathlib import Path
 
 
 class ImageBert(nn.Module, PyTorchModelHubMixin):
@@ -58,6 +61,17 @@ class ImageBert(nn.Module, PyTorchModelHubMixin):
         
         self.model.post_init()
 
+    def _save_pretrained(self, save_directory: Path) -> None:
+        """Save weights and config to a local directory."""
+        # Assume 'self.config' is your DictConfig object
+        # Convert to a regular dictionary
+        dict_config = OmegaConf.to_container(self.config)
+        # Save as JSON
+        file_path = Path(save_directory) / "config.json"
+        with open(file_path, 'w') as json_file:
+            json.dump(dict_config, json_file, indent=4)
+        super().save_pretrained(save_directory)
+    
     def forward(self, input_ids=None, condition=None, cond_drop_prob=0.1):
         # Token space:
         #  [0, codebook_size - 1]                       : those are the learned quantized image tokens
