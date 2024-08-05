@@ -32,7 +32,7 @@ from omegaconf import OmegaConf
 from pathlib import Path
 
 
-class ImageBert(nn.Module, PyTorchModelHubMixin):
+class ImageBert(nn.Module, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipeline_tag="text_to_image", license="mit"):
     def __init__(self, config):
 
         if isinstance(config, dict):
