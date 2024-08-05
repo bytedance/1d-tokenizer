@@ -23,7 +23,9 @@ from .blocks import TiTokEncoder, TiTokDecoder
 from .quantizer import VectorQuantizer
 from .maskgit_vqgan import Decoder as Pixel_Decoder
 from .maskgit_vqgan import VectorQuantizer as Pixel_Quantizer
+import json
 from omegaconf import OmegaConf
+from pathlib import Path
 
 from huggingface_hub import PyTorchModelHubMixin
 
