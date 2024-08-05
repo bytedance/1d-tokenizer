@@ -70,7 +70,7 @@ class ImageBert(nn.Module, PyTorchModelHubMixin):
         file_path = Path(save_directory) / "config.json"
         with open(file_path, 'w') as json_file:
             json.dump(dict_config, json_file, indent=4)
-        super().save_pretrained(save_directory)
+        super()._save_pretrained(save_directory)
     
     def forward(self, input_ids=None, condition=None, cond_drop_prob=0.1):
         # Token space:
