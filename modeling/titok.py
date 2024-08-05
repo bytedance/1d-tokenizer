@@ -25,7 +25,10 @@ from .maskgit_vqgan import Decoder as Pixel_Decoder
 from .maskgit_vqgan import VectorQuantizer as Pixel_Quantizer
 from omegaconf import OmegaConf
 
-class TiTok(nn.Module):
+from huggingface_hub import PyTorchModelHubMixin
+
+
+class TiTok(nn.Module, PyTorchModelHubMixin):
     def __init__(self, config):
         super().__init__()
         self.config = config

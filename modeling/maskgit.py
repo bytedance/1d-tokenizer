@@ -26,8 +26,10 @@ import math
 import torch.utils.checkpoint
 from transformers import BertConfig, BertModel
 
+from huggingface_hub import PyTorchModelHubMixin
 
-class ImageBert(nn.Module):
+
+class ImageBert(nn.Module, PyTorchModelHubMixin):
     def __init__(self, config):
         super().__init__()
         self.config = config
