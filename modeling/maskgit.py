@@ -34,6 +34,10 @@ from pathlib import Path
 
 class ImageBert(nn.Module, PyTorchModelHubMixin):
     def __init__(self, config):
+
+        if isinstance(config, dict):
+            config = OmegaConf.create(config)
+
         super().__init__()
         self.config = config
         self.target_codebook_size = config.model.vq_model.codebook_size
