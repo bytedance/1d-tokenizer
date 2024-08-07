@@ -23,10 +23,19 @@ from .blocks import TiTokEncoder, TiTokDecoder
 from .quantizer import VectorQuantizer
 from .maskgit_vqgan import Decoder as Pixel_Decoder
 from .maskgit_vqgan import VectorQuantizer as Pixel_Quantizer
+import json
 from omegaconf import OmegaConf
+from pathlib import Path
 
-class TiTok(nn.Module):
+from huggingface_hub import PyTorchModelHubMixin
+
+
+class TiTok(nn.Module, PyTorchModelHubMixin, tags=["arxiv:2304.12244", "image-tokenization"], license="mit"):
     def __init__(self, config):
+
+        if isinstance(config, dict):
+            config = OmegaConf.create(config)
+
         super().__init__()
         self.config = config
         self.encoder = TiTokEncoder(config)
@@ -56,6 +65,17 @@ class TiTok(nn.Module):
              "num_res_blocks": 2,
              "resolution": 256,
              "z_channels": 256}))
+        
+    def _save_pretrained(self, save_directory: Path) -> None:
+        """Save weights and config to a local directory."""
+        # Assume 'self.config' is your DictConfig object
+        # Convert to a regular dictionary
+        dict_config = OmegaConf.to_container(self.config)
+        # Save as JSON
+        file_path = Path(save_directory) / "config.json"
+        with open(file_path, 'w') as json_file:
+            json.dump(dict_config, json_file, indent=4)
+        super()._save_pretrained(save_directory)
 
     def _init_weights(self, module):
         """ Initialize the weights.
