@@ -1,7 +1,7 @@
 experiment:
-    tokenizer_checkpoint: "tokenizer_titok_l32.bin"
-    generator_checkpoint: "generator_titok_l32.bin"
-    output_dir: "titok_l_32"
+    tokenizer_checkpoint: "tokenizer_titok_b64.bin"
+    generator_checkpoint: "generator_titok_b64.bin"
+    output_dir: "titok_b_64"
 model:
     vq_model:
         codebook_size: 4096
@@ -9,11 +9,11 @@ model:
         use_l2_norm: True
         commitment_cost: 0.25
         # vit arch
-        vit_enc_model_size: "large"
-        vit_dec_model_size: "large"
+        vit_enc_model_size: "base"
+        vit_dec_model_size: "base"
         vit_enc_patch_size: 16
         vit_dec_patch_size: 16
-        num_latent_tokens: 32
+        num_latent_tokens: 64
     
     generator:
         model_type: "ViT"
@@ -30,10 +30,9 @@ model:
         condition_num_classes: 1000
 
         # sampling hyper-params
-        randomize_temperature: 9.5
-        guidance_scale: 4.5
+        randomize_temperature: 11.0
+        guidance_scale: 3.0
         guidance_decay: "linear"
-        
 
 dataset:
     preprocessing:
