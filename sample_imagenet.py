@@ -47,9 +47,10 @@ def create_npz_from_sample_folder(sample_dir, num=50_000):
 
 
 def main():
+    config = demo_util.get_config_cli()
     num_fid_samples = 50000
     per_proc_batch_size = 125
-    sample_folder_dir = "sampled_titok_l_32"
+    sample_folder_dir = config.experiment.output_dir
     seed = 42
 
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -70,11 +71,9 @@ def main():
 
     if rank == 0:
         # downloads from hf
-        hf_hub_download(repo_id="fun-research/TiTok", filename="tokenizer_titok_l32.bin", local_dir="./")
-        hf_hub_download(repo_id="fun-research/TiTok", filename="generator_titok_l32.bin", local_dir="./")
+        hf_hub_download(repo_id="fun-research/TiTok", filename=f"{config.experiment.tokenizer_checkpoint}", local_dir="./")
+        hf_hub_download(repo_id="fun-research/TiTok", filename=f"{config.experiment.generator_checkpoint}", local_dir="./")
     dist.barrier()
-
-    config = demo_util.get_config("configs/titok_l32.yaml")
 
     titok_tokenizer = demo_util.get_titok_tokenizer(config)
     titok_generator = demo_util.get_titok_generator(config)
@@ -113,11 +112,11 @@ def main():
             generator=titok_generator,
             tokenizer=titok_tokenizer,
             labels=y.long(),
-            randomize_temperature=9.5,
+            randomize_temperature=config.model.generator.randomize_temperature,
             softmax_temperature_annealing=True,
-            num_sample_steps=8,
-            guidance_scale=4.5,
-            guidance_decay=True,
+            num_sample_steps=config.model.generator.num_steps,
+            guidance_scale=config.model.generator.guidance_scale,
+            guidance_decay=config.model.generator.guidance_decay,
             device=device
         )
         # Save samples to disk as individual .png files

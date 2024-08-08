@@ -17,6 +17,7 @@ limitations under the License.
 Reference: 
     https://github.com/huggingface/open-muse
     https://github.com/baaivision/MUSE-Pytorch
+    https://github.com/sail-sg/MDT/blob/main/masked_diffusion/models.py
 """
 
 import torch
@@ -31,6 +32,8 @@ from huggingface_hub import PyTorchModelHubMixin
 from omegaconf import OmegaConf
 from pathlib import Path
 
+from .blocks import UViTBlock
+
 
 class ImageBert(nn.Module, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipeline_tag="text_to_image", license="mit"):
     def __init__(self, config):
@@ -44,13 +47,17 @@ class ImageBert(nn.Module, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipe
         self.condition_num_classes = config.model.generator.condition_num_classes
         self.image_seq_len = config.model.generator.image_seq_len
         self.mask_token_id = self.target_codebook_size
+        self.hidden_size = config.model.generator.hidden_size
+        self.num_hidden_layers = config.model.generator.num_hidden_layers
+        self.num_attention_heads = config.model.generator.num_attention_heads
+        self.intermediate_size = config.model.generator.intermediate_size
 
         self.model = BertModel(BertConfig(
             vocab_size=self.target_codebook_size + self.condition_num_classes + 2,
-            hidden_size=768,
-            num_hidden_layers=24,
-            num_attention_heads=16,
-            intermediate_size=3072,
+            hidden_size=self.hidden_size,
+            num_hidden_layers=self.num_hidden_layers,
+            num_attention_heads=self.num_attention_heads,
+            intermediate_size=self.intermediate_size,
             hidden_act='gelu',
             hidden_dropout_prob=config.model.generator.dropout,
             attention_probs_dropout_prob=config.model.generator.attn_drop,
@@ -61,7 +68,7 @@ class ImageBert(nn.Module, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipe
             position_embedding_type="absolute",
             use_cache=True
         ), add_pooling_layer=False)
-        self.model.lm_head = nn.Linear(768, self.target_codebook_size, bias=True)
+        self.model.lm_head = nn.Linear(self.hidden_size, self.target_codebook_size, bias=True)
         
         self.model.post_init()
 
@@ -102,19 +109,33 @@ class ImageBert(nn.Module, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipe
     def generate(self,
                  condition,
                  guidance_scale=3.0,
-                 guidance_decay=False,
+                 guidance_decay="constant",
+                 guidance_scale_pow=3.0,
                  randomize_temperature=4.5,
                  softmax_temperature_annealing=False,
                  num_sample_steps=8):
+        if guidance_decay not in ["constant", "linear", "power-cosine"]:
+            # contstant: constant guidance scale
+            # linear: linear increasing the guidance scale as in MUSE
+            # power-cosine: the guidance schedule from MDT
+            raise ValueError(f"Unsupported guidance decay {guidance_decay}")
         device = condition.device
         ids = torch.full((condition.shape[0], self.image_seq_len),
                           self.mask_token_id, device=device)
-        cfg_scale = 0. if guidance_decay else guidance_scale
+
+        cfg_scale = guidance_scale if guidance_decay == "constant" else 0.
 
         for step in range(num_sample_steps):
             ratio = 1. * (step + 1) / num_sample_steps
             annealed_temp = randomize_temperature * (1.0 - ratio)
             is_mask = (ids == self.mask_token_id)
+
+            if guidance_decay == "power-cosine":
+                # ref: https://github.com/sail-sg/MDT/blob/main/masked_diffusion/models.py#L501
+                guidance_scale_pow = torch.ones((1), device=device) * guidance_scale_pow
+                scale_step = (1 - torch.cos(((step / num_sample_steps) ** guidance_scale_pow) * torch.pi)) * 1/2
+                cfg_scale = (guidance_scale - 1) * scale_step + 1
+
             if cfg_scale != 0:
                 cond_logits = self.forward(
                     ids, condition, cond_drop_prob=0.0
@@ -122,7 +143,10 @@ class ImageBert(nn.Module, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipe
                 uncond_logits = self.forward(
                     ids, condition, cond_drop_prob=1.0
                 )
-                logits = cond_logits + (cond_logits - uncond_logits) * cfg_scale
+                if guidance_decay == "power-cosine":
+                    logits = uncond_logits + (cond_logits - uncond_logits) * cfg_scale
+                else:
+                    logits = cond_logits + (cond_logits - uncond_logits) * cfg_scale
             else:
                 logits = self.forward(
                     ids, condition, cond_drop_prob=0.0
@@ -162,6 +186,82 @@ class ImageBert(nn.Module, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipe
             else:
                 ids = torch.where(masking, self.mask_token_id, sampled_ids)
 
-            if guidance_decay:
+            if guidance_decay == "linear":
                 cfg_scale = ratio * guidance_scale
         return ids
+
+
+class UViTBert(ImageBert):
+    def __init__(self, config):
+        super().__init__(config=config)
+
+        del self.model
+
+        self.embeddings = nn.Embedding(
+            self.target_codebook_size + self.condition_num_classes + 2,
+            self.hidden_size)
+        
+        self.pos_embed = nn.init.trunc_normal_(
+            nn.Parameter(torch.zeros(1, self.config.model.generator.image_seq_len + 1, self.hidden_size)), 0., 0.02)
+ 
+        self.in_blocks = nn.ModuleList([
+            UViTBlock(
+                dim=self.hidden_size, num_heads=self.num_attention_heads, mlp_ratio=(self.intermediate_size / self.hidden_size),
+                qkv_bias=False, qk_scale=None, norm_layer=nn.LayerNorm, use_checkpoint=False)
+            for _ in range(self.num_hidden_layers // 2)])
+
+        self.mid_block = UViTBlock(
+                dim=self.hidden_size, num_heads=self.num_attention_heads, mlp_ratio=(self.intermediate_size / self.hidden_size),
+                qkv_bias=False, qk_scale=None, norm_layer=nn.LayerNorm, use_checkpoint=False)
+
+        self.out_blocks = nn.ModuleList([
+            UViTBlock(
+                dim=self.hidden_size, num_heads=self.num_attention_heads, mlp_ratio=(self.intermediate_size / self.hidden_size),
+                qkv_bias=False, qk_scale=None, norm_layer=nn.LayerNorm, skip=True, use_checkpoint=False)
+            for _ in range(self.num_hidden_layers // 2)])
+
+        self.norm = nn.LayerNorm(self.hidden_size)
+        self.lm_head = nn.Linear(self.hidden_size,
+                                 self.target_codebook_size, bias=True)
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.Embedding):
+            m.weight.data = nn.init.trunc_normal_(m.weight.data, mean=0.0, std=0.02)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    def forward(self, input_ids=None, condition=None, cond_drop_prob=0.1):
+        # Token space:
+        #  [0, codebook_size - 1]                       : those are the learned quantized image tokens
+        #  codebook_size                                : the mask token used to mask image tokens
+        #  [codebook_size + 1, codebook_size + nclass]  : the imagenet class tokens
+        #  codebook_size + 1 + nclass                   : the class drop label
+        drop_label_mask = torch.rand_like(condition, dtype=torch.float) < cond_drop_prob
+        # Shift the classes
+        condition = condition + self.target_codebook_size + 1  # [0, 999] -> [codebook_size + 1, codebook_size + 999]
+        condition[drop_label_mask] = self.condition_num_classes + self.target_codebook_size + 1
+        # prepend condition token
+        if input_ids is not None:
+            input_ids = torch.cat([condition.view(condition.shape[0], -1),
+                                   input_ids.view(input_ids.shape[0], -1),], dim=1)
+        else:
+            # at least there should be masked token
+            raise NotImplementedError
+        # UViT forward
+        embeddings = self.embeddings(input_ids)
+        x = embeddings + self.pos_embed[:, :embeddings.shape[1]]
+        skips = []
+        for blk in self.in_blocks:
+            x = blk(x)
+            skips.append(x)
+        x = self.mid_block(x)
+        for blk in self.out_blocks:
+            x = blk(x, skips.pop())
+        x = self.norm(x)
+        return self.lm_head(x[:, 1:]) # remove cond

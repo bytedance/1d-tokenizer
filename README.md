@@ -29,12 +29,12 @@ We present a compact 1D tokenizer which can represent an image with as few as 32
 ## Model Zoo
 | Dataset  | Model | Link | FID |
 | ------------- | ------------- | ------------- | ------------- |
-| ImageNet  | TiTok-L-32 Tokenizer | [checkpoint](https://drive.google.com/file/d/1I_m2Vm4JgQsa7bZVORj-nVhP8fgQLngd/view?usp=sharing), [hf model](https://huggingface.co/fun-research/TiTok/blob/main/tokenizer_titok_l32.bin)| 2.21 (reconstruction) |
-| ImageNet  | TiTok-B-64 Tokenizer | TODO | 1.70 (reconstruction) |
-| ImageNet  | TiTok-S-128 Tokenizer | TODO | 1.71 (reconstruction) |
-| ImageNet  | TiTok-L-32 Generator | [checkpoint](https://drive.google.com/file/d/1IgqZ_vwGIj2ZWOPuCzilxeQ2UrMVY93l/view?usp=sharing), [hf model](https://huggingface.co/fun-research/TiTok/blob/main/generator_titok_l32.bin) | 2.77 (generation) |
-| ImageNet  | TiTok-B-64 Generator | TODO | 2.48 (generation) |
-| ImageNet  | TiTok-S-128 Generator | TODO | 1.97 (generation) |
+| ImageNet  | TiTok-L-32 Tokenizer | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/tokenizer_titok_l32.bin)| 2.21 (reconstruction) |
+| ImageNet  | TiTok-B-64 Tokenizer | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/tokenizer_titok_b64.bin) | 1.70 (reconstruction) |
+| ImageNet  | TiTok-S-128 Tokenizer | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/tokenizer_titok_s128.bin) | 1.71 (reconstruction) |
+| ImageNet  | TiTok-L-32 Generator | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/generator_titok_l32.bin) | 2.77 (generation) |
+| ImageNet  | TiTok-B-64 Generator | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/generator_titok_b64.bin) | 2.48 (generation) |
+| ImageNet  | TiTok-S-128 Generator | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/generator_titok_s128.bin) | 1.97 (generation) |
 
 Please note that these models are trained only on limited academic dataset ImageNet, and they are only for research purposes.
 
@@ -99,11 +99,29 @@ We also support TiTok with [HuggingFace 🤗 Demo](https://huggingface.co/spaces
 ## Testing on ImageNet-1K Benchmark
 
 We provide a [sampling script](./sample_imagenet.py) for reproducing the generation results on ImageNet-1K benchmark.
+```bash
+# Prepare ADM evaluation script
+git clone https://github.com/openai/guided-diffusion.git
+
+wget https://openaipublic.blob.core.windows.net/diffusion/jul-2021/ref_batches/imagenet/256/VIRTUAL_imagenet256_labeled.npz
+```
 ```python
-torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet.py
+# Reproducing TiTok-L-32
+torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet.py config=configs/titok_l32.yaml experiment.output_dir="titok_l_32"
+# Run eval script. The result FID should be ~2.77
+python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_l_32.npz
+
+# Reproducing TiTok-B-64
+torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet.py config=configs/titok_b64.yaml experiment.output_dir="titok_b_64"
+# Run eval script. The result FID should be ~2.48
+python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_b_64.npz
+
+# Reproducing TiTok-S-128
+torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet.py config=configs/titok_s128.yaml experiment.output_dir="titok_s_128"
+# Run eval script. The result FID should be ~1.97
+python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_s_128.npz
 ```
 
-Afterwards, evaluate the obtained npz file with [ADM script](https://github.com/openai/guided-diffusion/tree/main/evaluations). You should have expect a FID score around 2.77
 ## Visualizations
 <p>
 <img src="assets/recon_w_model_size_num_token.png" alt="teaser" width=90% height=90%>

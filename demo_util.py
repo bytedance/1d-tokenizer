@@ -20,7 +20,7 @@ import torch
 
 from omegaconf import OmegaConf
 from modeling.titok import TiTok
-from modeling.maskgit import ImageBert
+from modeling.maskgit import ImageBert, UViTBert
 
 
 def get_config_cli():
@@ -43,7 +43,13 @@ def get_titok_tokenizer(config):
     return tokenizer
 
 def get_titok_generator(config):
-    generator = ImageBert(config)
+    if config.model.generator.model_type == "ViT":
+        model_cls = ImageBert
+    elif config.model.generator.model_type == "UViT":
+        model_cls = UViTBert
+    else:
+        raise ValueError(f"Unsupported model type {config.model.generator.model_type}")
+    generator = model_cls(config)
     generator.load_state_dict(torch.load(config.experiment.generator_checkpoint, map_location="cpu"))
     generator.eval()
     generator.requires_grad_(False)
@@ -54,7 +60,8 @@ def sample_fn(generator,
               tokenizer,
               labels=None,
               guidance_scale=3.0,
-              guidance_decay=False,
+              guidance_decay="constant",
+              guidance_scale_pow=3.0,
               randomize_temperature=2.0,
               softmax_temperature_annealing=False,
               num_sample_steps=8,
@@ -72,6 +79,7 @@ def sample_fn(generator,
         condition=labels,
         guidance_scale=guidance_scale,
         guidance_decay=guidance_decay,
+        guidance_scale_pow=guidance_scale_pow,
         randomize_temperature=randomize_temperature,
         softmax_temperature_annealing=softmax_temperature_annealing,
         num_sample_steps=num_sample_steps)
