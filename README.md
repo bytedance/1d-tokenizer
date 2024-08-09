@@ -51,15 +51,20 @@ from PIL import Image
 import numpy as np
 import demo_util
 from huggingface_hub import hf_hub_download
+from modeling.maskgit import ImageBert
+from modeling.titok import TiTok
 
-# downloads TiTok-L-32 from hf
-hf_hub_download(repo_id="fun-research/TiTok", filename="tokenizer_titok_l32.bin", local_dir="./")
-hf_hub_download(repo_id="fun-research/TiTok", filename="generator_titok_l32.bin", local_dir="./")
+titok_tokenizer = TiTok.from_pretrained("yucornetto/tokenizer_titok_l32_imagenet")
+titok_generator = ImageBert.from_pretrained("yucornetto/generator_titok_l32_imagenet")
+
+# or alternatively, downloads from hf
+# hf_hub_download(repo_id="fun-research/TiTok", filename="tokenizer_titok_l32.bin", local_dir="./")
+# hf_hub_download(repo_id="fun-research/TiTok", filename="generator_titok_l32.bin", local_dir="./")
 
 # load config
-config = demo_util.get_config("configs/titok_l32.yaml")
-titok_tokenizer = demo_util.get_titok_tokenizer(config)
-titok_generator = demo_util.get_titok_generator(config)
+# config = demo_util.get_config("configs/titok_l32.yaml")
+# titok_tokenizer = demo_util.get_titok_tokenizer(config)
+# titok_generator = demo_util.get_titok_generator(config)
 
 device = "cuda"
 titok_tokenizer = titok_tokenizer.to(device)
@@ -121,6 +126,11 @@ torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_ima
 # Run eval script. The result FID should be ~1.97
 python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_s_128.npz
 ```
+## Updates
+- 08/09/2024: Better support on loading pretrained weights from huggingface models, thanks for the help from [@NielsRogge](https://github.com/NielsRogge)！
+- 07/03/2024: Evaluation scripts for reproducing the results reported in the paper, checkpoints of TiTok-B64 and TiTok-S128 are available.
+- 06/21/2024: Demo code and TiTok-L-32 checkpoints release. 
+- 06/11/2024: The [tech report](https://arxiv.org/abs/2406.07550) of this project is available.
 
 ## Visualizations
 <p>
