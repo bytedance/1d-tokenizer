@@ -55,7 +55,11 @@ from modeling.maskgit import ImageBert
 from modeling.titok import TiTok
 
 titok_tokenizer = TiTok.from_pretrained("yucornetto/tokenizer_titok_l32_imagenet")
+titok_tokenizer.eval()
+titok_tokenizer.requires_grad_(False)
 titok_generator = ImageBert.from_pretrained("yucornetto/generator_titok_l32_imagenet")
+titok_generator.eval()
+titok_generator.requires_grad_(False)
 
 # or alternatively, downloads from hf
 # hf_hub_download(repo_id="fun-research/TiTok", filename="tokenizer_titok_l32.bin", local_dir="./")
