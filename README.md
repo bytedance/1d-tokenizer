@@ -18,6 +18,12 @@ We present a compact 1D tokenizer which can represent an image with as few as 32
 <img src="assets/speed_vs_perf.png" alt="teaser" width=90% height=90%>
 </p>
 
+## Updates
+- 08/09/2024: Better support on loading pretrained weights from huggingface models, thanks for the help from [@NielsRogge](https://github.com/NielsRogge)！
+- 07/03/2024: Evaluation scripts for reproducing the results reported in the paper, checkpoints of TiTok-B64 and TiTok-S128 are available.
+- 06/21/2024: Demo code and TiTok-L-32 checkpoints release. 
+- 06/11/2024: The [tech report](https://arxiv.org/abs/2406.07550) of this project is available.
+
 ## 🚀 Contributions
 
 #### We introduce a novel 1D image tokenization framework that breaks grid constraints existing in 2D tokenization methods, leading to a much more flexible and compact image latent representation.
@@ -130,11 +136,6 @@ torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_ima
 # Run eval script. The result FID should be ~1.97
 python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_s_128.npz
 ```
-## Updates
-- 08/09/2024: Better support on loading pretrained weights from huggingface models, thanks for the help from [@NielsRogge](https://github.com/NielsRogge)！
-- 07/03/2024: Evaluation scripts for reproducing the results reported in the paper, checkpoints of TiTok-B64 and TiTok-S128 are available.
-- 06/21/2024: Demo code and TiTok-L-32 checkpoints release. 
-- 06/11/2024: The [tech report](https://arxiv.org/abs/2406.07550) of this project is available.
 
 ## Visualizations
 <p>
