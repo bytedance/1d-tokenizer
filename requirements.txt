@@ -10,3 +10,8 @@ pillow
 accelerate
 gdown
 huggingface-hub
+einops
+wandb
+torch-fidelity
+torchinfo
+webdataset

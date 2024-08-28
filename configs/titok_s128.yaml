@@ -14,6 +14,7 @@ model:
         vit_enc_patch_size: 16
         vit_dec_patch_size: 16
         num_latent_tokens: 128
+        finetune_decoder: True
     
     generator:
         model_type: "UViT"

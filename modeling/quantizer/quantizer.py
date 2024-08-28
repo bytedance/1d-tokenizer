@@ -58,7 +58,6 @@ class VectorQuantizer(torch.nn.Module):
         z_quantized = self.get_codebook_entry(min_encoding_indices).view(z.shape)
 
         if self.use_l2_norm:
-            z_quantized = torch.nn.functional.normalize(z_quantized, dim=-1)
             z = torch.nn.functional.normalize(z, dim=-1)
 
         # compute loss for embedding
@@ -89,4 +88,6 @@ class VectorQuantizer(torch.nn.Module):
             z_quantized = torch.einsum('bd,dn->bn', indices, self.embedding.weight)
         else:
             raise NotImplementedError
+        if self.use_l2_norm:
+            z_quantized = torch.nn.functional.normalize(z_quantized, dim=-1)
         return z_quantized
