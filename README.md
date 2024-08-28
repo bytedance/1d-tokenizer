@@ -137,6 +137,10 @@ torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_ima
 # Run eval script. The result FID should be ~1.97
 python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_s_128.npz
 ```
+## Training Prepartion
+We use [webdataset](https://github.com/webdataset/webdataset) format for data loading. To begin with, it is needed to convert the dataset into webdataset format. An example script to convert ImageNet to wds format is provided [here](./data/convert_imagenet_to_wds.py).
+
+Furthermore, the stage1 training relies on a pre-trained MaskGIT-VQGAN to generate proxy codes as learning targets. You can convert the [official JaX weight](https://github.com/google-research/maskgit) to PyTorch version using [this script](https://github.com/huggingface/open-muse/blob/main/scripts/convert_maskgit_vqgan.py). Alternatively, we provided a converted version at [HuggingFace](https://huggingface.co/fun-research/TiTok/blob/main/maskgit-vqgan-imagenet-f16-256.bin) and [Google Drive](https://drive.google.com/file/d/1DjZqzJrUt2hwpmUPkjGSBTFEJcOkLY-Q/view?usp=sharing).
 
 ## Training
 We provide example commands to train TiTok as follows:
@@ -154,7 +158,8 @@ WANDB_MODE=offline accelerate launch --num_machines=1 --num_processes=8 --machin
     experiment.project="titok_b64_stage2" \
     experiment.name="titok_b64_stage2_run1" \
     experiment.output_dir="titok_b64_stage2_run1" \
-    training.per_gpu_batch_size=32
+    training.per_gpu_batch_size=32 \
+    experiment.init_weight=${PATH_TO_STAGE1_WEIGHT}
 ```
 
 The config _titok_b64.yaml_ can be replaced with _titok_s128.yaml_ or _titok_l32.yaml_ for other TiTok variants.
