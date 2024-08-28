@@ -503,24 +503,24 @@ def train_one_epoch(config, logger, accelerator,
                     if config.training.get("use_ema", False):
                         # Switch back to the original model parameters for training.
                         ema_model.restore(model.parameters())
+                else:
+                    # Eval for non-EMA.
+                    eval_scores = eval_reconstruction(
+                        model,
+                        eval_dataloader,
+                        accelerator,
+                        evaluator,
+                        pretrained_tokenizer=pretrained_tokenizer
+                    )
 
-                # Eval for non-EMA.
-                eval_scores = eval_reconstruction(
-                    model,
-                    eval_dataloader,
-                    accelerator,
-                    evaluator,
-                    pretrained_tokenizer=pretrained_tokenizer
-                )
-
-                logger.info(
-                    f"Non-EMA EVALUATION "
-                    f"Step: {global_step + 1} "
-                )
-                logger.info(pprint.pformat(eval_scores))
-                if accelerator.is_main_process:
-                    eval_log = {f'eval/'+k: v for k, v in eval_scores.items()}
-                    accelerator.log(eval_log, step=global_step + 1)
+                    logger.info(
+                        f"Non-EMA EVALUATION "
+                        f"Step: {global_step + 1} "
+                    )
+                    logger.info(pprint.pformat(eval_scores))
+                    if accelerator.is_main_process:
+                        eval_log = {f'eval/'+k: v for k, v in eval_scores.items()}
+                        accelerator.log(eval_log, step=global_step + 1)
 
                 accelerator.wait_for_everyone()
 
@@ -588,12 +588,10 @@ def reconstruct_images(model, original_images, fnames, accelerator,
         original_images,
         reconstructed_images
     )
-    encoded_codes = [str(codes.cpu().tolist()) for codes in encoder_dict["min_encoding_indices"]]
-
     # Log images.
     if config.training.enable_wandb:
         accelerator.get_tracker("wandb").log_images(
-            {f"Train Reconstruction": images_for_saving}, captions=encoded_codes,
+            {f"Train Reconstruction": images_for_saving},
             step=global_step
         )
     else:
