@@ -32,7 +32,7 @@ from huggingface_hub import PyTorchModelHubMixin
 from omegaconf import OmegaConf
 from pathlib import Path
 
-from .blocks import UViTBlock
+from modeling.modules.blocks import UViTBlock
 
 
 class ImageBert(nn.Module, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipeline_tag="text_to_image", license="mit"):
