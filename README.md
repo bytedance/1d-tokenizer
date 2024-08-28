@@ -18,6 +18,13 @@ We present a compact 1D tokenizer which can represent an image with as few as 32
 <img src="assets/speed_vs_perf.png" alt="teaser" width=90% height=90%>
 </p>
 
+## Updates
+- 08/28/2024: Release of the training codes of TiTok.
+- 08/09/2024: Better support on loading pretrained weights from huggingface models, thanks for the help from [@NielsRogge](https://github.com/NielsRogge)！
+- 07/03/2024: Evaluation scripts for reproducing the results reported in the paper, checkpoints of TiTok-B64 and TiTok-S128 are available.
+- 06/21/2024: Demo code and TiTok-L-32 checkpoints release. 
+- 06/11/2024: The [tech report](https://arxiv.org/abs/2406.07550) of this project is available.
+
 ## 🚀 Contributions
 
 #### We introduce a novel 1D image tokenization framework that breaks grid constraints existing in 2D tokenization methods, leading to a much more flexible and compact image latent representation.
@@ -130,11 +137,27 @@ torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_ima
 # Run eval script. The result FID should be ~1.97
 python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_s_128.npz
 ```
-## Updates
-- 08/09/2024: Better support on loading pretrained weights from huggingface models, thanks for the help from [@NielsRogge](https://github.com/NielsRogge)！
-- 07/03/2024: Evaluation scripts for reproducing the results reported in the paper, checkpoints of TiTok-B64 and TiTok-S128 are available.
-- 06/21/2024: Demo code and TiTok-L-32 checkpoints release. 
-- 06/11/2024: The [tech report](https://arxiv.org/abs/2406.07550) of this project is available.
+
+## Training
+We provide example commands to train TiTok as follows:
+```bash
+# Training for TiTok-B64
+# Stage 1
+WANDB_MODE=offline accelerate launch --num_machines=1 --num_processes=8 --machine_rank=0 --main_process_ip=127.0.0.1 --main_process_port=9999 --same_network scripts/train_titok.py config=configs/training/stage1/titok_b64.yaml \
+    experiment.project="titok_b64_stage1" \
+    experiment.name="titok_b64_stage1_run1" \
+    experiment.output_dir="titok_b64_stage1_run1" \
+    training.per_gpu_batch_size=32
+
+# Stage 2
+WANDB_MODE=offline accelerate launch --num_machines=1 --num_processes=8 --machine_rank=0 --main_process_ip=127.0.0.1 --main_process_port=9999 --same_network scripts/train_titok.py config=configs/training/stage2/titok_b64.yaml \
+    experiment.project="titok_b64_stage2" \
+    experiment.name="titok_b64_stage2_run1" \
+    experiment.output_dir="titok_b64_stage2_run1" \
+    training.per_gpu_batch_size=32
+```
+
+The config _titok_b64.yaml_ can be replaced with _titok_s128.yaml_ or _titok_l32.yaml_ for other TiTok variants.
 
 ## Visualizations
 <p>
