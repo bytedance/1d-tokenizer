@@ -78,7 +78,7 @@ class TiTok(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2304.12244", "image-to
         super().__init__()
         self.config = config
         # This should be False for stage1 and True for stage2.
-        self.finetune_decoder = config.model.vq_model.finetune_decoder
+        self.finetune_decoder = config.model.vq_model.get("finetune_decoder", True)
         self.encoder = TiTokEncoder(config)
         self.decoder = TiTokDecoder(config)
         
