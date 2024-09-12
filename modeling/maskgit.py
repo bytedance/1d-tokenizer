@@ -26,16 +26,18 @@ import numpy as np
 import math
 import torch.utils.checkpoint
 from transformers import BertConfig, BertModel
+from einops import rearrange
 
 import json
 from huggingface_hub import PyTorchModelHubMixin
 from omegaconf import OmegaConf
 from pathlib import Path
 
+from modeling.modules.base_model import BaseModel
 from modeling.modules.blocks import UViTBlock
 
 
-class ImageBert(nn.Module, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipeline_tag="text_to_image", license="mit"):
+class ImageBert(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipeline_tag="text_to_image", license="mit"):
     def __init__(self, config):
 
         if isinstance(config, dict):
@@ -189,6 +191,19 @@ class ImageBert(nn.Module, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipe
             if guidance_decay == "linear":
                 cfg_scale = ratio * guidance_scale
         return ids
+
+    def masking_input_tokens(self, input_tokens):
+        batch_size, seq_len = input_tokens.shape
+        device = input_tokens.device
+
+        timesteps = torch.zeros((batch_size,), device=device).float().uniform_(0, 1.0)
+        mask_ratio = torch.acos(timesteps) / (math.pi * 0.5) # arccos schedule
+        mask_ratio = torch.clamp(mask_ratio, min=1e-6, max=1.)
+        num_token_masked = (seq_len * mask_ratio).round().clamp(min=1)
+        batch_randperm = torch.rand(batch_size, seq_len, device=device).argsort(dim=-1)
+        masks = batch_randperm < rearrange(num_token_masked, 'b -> b 1')
+        masked_tokens = torch.where(masks, self.mask_token_id, input_tokens)
+        return masked_tokens, masks
 
 
 class UViTBert(ImageBert):
