@@ -65,7 +65,8 @@ def sample_fn(generator,
               randomize_temperature=2.0,
               softmax_temperature_annealing=False,
               num_sample_steps=8,
-              device="cuda"):
+              device="cuda",
+              return_tensor=False):
     generator.eval()
     tokenizer.eval()
     if labels is None:
@@ -87,6 +88,8 @@ def sample_fn(generator,
     generated_image = tokenizer.decode_tokens(
         generated_tokens.view(generated_tokens.shape[0], -1)
     )
+    if return_tensor:
+        return generated_image
 
     generated_image = torch.clamp(generated_image, 0.0, 1.0)
     generated_image = (generated_image * 255.0).permute(0, 2, 3, 1).to("cpu", dtype=torch.uint8).numpy()

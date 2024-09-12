@@ -19,7 +19,8 @@ We present a compact 1D tokenizer which can represent an image with as few as 32
 </p>
 
 ## Updates
-- 08/28/2024: Release of the training codes of TiTok.
+- 09/11/2024: Release the training codes of generator based on TiTok. 
+- 08/28/2024: Release the training codes of TiTok.
 - 08/09/2024: Better support on loading pretrained weights from huggingface models, thanks for the help from [@NielsRogge](https://github.com/NielsRogge)！
 - 07/03/2024: Evaluation scripts for reproducing the results reported in the paper, checkpoints of TiTok-B64 and TiTok-S128 are available.
 - 06/21/2024: Demo code and TiTok-L-32 checkpoints release. 
@@ -160,6 +161,13 @@ WANDB_MODE=offline accelerate launch --num_machines=1 --num_processes=8 --machin
     experiment.output_dir="titok_b64_stage2_run1" \
     training.per_gpu_batch_size=32 \
     experiment.init_weight=${PATH_TO_STAGE1_WEIGHT}
+
+# Train Generator (TiTok-B64 as example)
+WANDB_MODE=offline accelerate launch --num_machines=4 --num_processes=32 --machine_rank=${MACHINE_RANK} --main_process_ip=${ROOT_IP}--main_process_port=${ROOT_PORT} --same_network scripts/train_maskgit.py config=configs/training/generator/maskgit.yaml \
+    experiment.project="titok_generation" \
+    experiment.name="titok_b64_maskgit" \
+    experiment.output_dir="titok_b64_maskgit" \
+    experiment.tokenizer_checkpoint=${PATH_TO_STAGE1_or_STAGE2_WEIGHT}
 ```
 
 The config _titok_b64.yaml_ can be replaced with _titok_s128.yaml_ or _titok_l32.yaml_ for other TiTok variants.

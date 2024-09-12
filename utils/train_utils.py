@@ -28,11 +28,13 @@ import torch
 from omegaconf import OmegaConf
 from torch.optim import AdamW
 from utils.lr_schedulers import get_scheduler
-from modeling.modules import EMAModel, ReconstructionLoss_Stage1, ReconstructionLoss_Stage2
+from modeling.modules import EMAModel, ReconstructionLoss_Stage1, ReconstructionLoss_Stage2, MLMLoss
 from modeling.titok import TiTok, PretrainedTokenizer
+from modeling.maskgit import ImageBert, UViTBert
 from evaluator import VQGANEvaluator
+from demo_util import get_titok_tokenizer, sample_fn
 
-from utils.viz_utils import make_viz_from_samples
+from utils.viz_utils import make_viz_from_samples, make_viz_from_samples_generation
 from torchinfo import summary
 
 
@@ -86,11 +88,19 @@ def create_model_and_loss_module(config, logger, accelerator,
     if model_type == "titok":
         model_cls = TiTok
         loss_cls = ReconstructionLoss_Stage2 if config.model.vq_model.finetune_decoder else ReconstructionLoss_Stage1
+    elif model_type == "maskgit":
+        if config.model.generator.model_type == "ViT":
+            model_cls = ImageBert
+        elif config.model.generator.model_type == "UViT":
+            model_cls == UViTBert
+        else:
+            raise ValueError(f"Unsupported generator model_type {config.model.generator.model_type}")
+        loss_cls = MLMLoss
     else:
         raise ValueError(f"Unsupported model_type {model_type}")
     model = model_cls(config)
 
-    if config.experiment.init_weight:
+    if config.experiment.get("init_weight", ""):
         # If loading a pretrained weight
         model_weight = torch.load(config.experiment.init_weight, map_location="cpu")
         if config.model.vq_model.finetune_decoder:
@@ -130,10 +140,20 @@ def create_model_and_loss_module(config, logger, accelerator,
 
     # Print Model for sanity check.
     if accelerator.is_main_process:
-        if model_type in ['titok']:
+        if model_type in ["titok"]:
             input_size = (1, 3, config.dataset.preprocessing.crop_size, config.dataset.preprocessing.crop_size)
             model_summary_str = summary(model, input_size=input_size, depth=5,
             col_names=("input_size", "output_size", "num_params", "params_percent", "kernel_size", "mult_adds"))
+            logger.info(model_summary_str)
+        elif model_type in ["maskgit"]:
+            input_size = (1, config.model.vq_model.num_latent_tokens)
+            input_data = [
+                torch.randint(0, config.model.vq_model.codebook_size, input_size),
+                torch.ones(1, dtype=int)
+            ]
+            model_summary_str = summary(
+                model, input_data=input_data, depth=7,
+                col_names=("input_size", "output_size", "num_params", "params_percent", "kernel_size", "mult_adds"))
             logger.info(model_summary_str)
         else:
             raise NotImplementedError
@@ -141,7 +161,8 @@ def create_model_and_loss_module(config, logger, accelerator,
     return model, ema_model, loss_module
 
 
-def create_optimizer(config, logger, model, loss_module):
+def create_optimizer(config, logger, model, loss_module,
+                     need_discrminator=True):
     """Creates optimizer for TiTok and discrminator."""
     logger.info("Creating optimizers.")
     optimizer_config = config.optimizer.params
@@ -169,7 +190,7 @@ def create_optimizer(config, logger, model, loss_module):
         betas=(optimizer_config.beta1, optimizer_config.beta2)
     )
 
-    if config.model.vq_model.finetune_decoder:
+    if config.model.vq_model.finetune_decoder and need_discrminator:
         discriminator_learning_rate = optimizer_config.discriminator_learning_rate
         discriminator_named_parameters = list(loss_module.named_parameters())
         discriminator_gain_or_bias_params = [p for n, p in discriminator_named_parameters if exclude(n, p) and p.requires_grad]
@@ -227,6 +248,7 @@ def create_dataloader(config, logger, accelerator):
     preproc_config = config.dataset.preprocessing
     dataset_config = config.dataset.params
 
+    # TODO: add support on pre-tokenization dataset
     dataset = SimpleImageDataset(
         train_shards_path=dataset_config.train_shards_path_or_url,
         eval_shards_path=dataset_config.eval_shards_path_or_url,
@@ -411,7 +433,6 @@ def train_one_epoch(config, logger, accelerator,
                 
                 discriminator_optimizer.zero_grad(set_to_none=True)
 
-        # not train_generator specifies we finish both a generator step and a discriminator step
         if accelerator.sync_gradients:
             if config.training.use_ema:
                 ema_model.step(model.parameters())
@@ -536,6 +557,148 @@ def train_one_epoch(config, logger, accelerator,
     return global_step
 
 
+def train_one_epoch_generator(
+                    config, logger, accelerator,
+                    model, ema_model, loss_module,
+                    optimizer,
+                    lr_scheduler,
+                    train_dataloader,
+                    tokenizer,
+                    global_step,):
+    """One epoch training."""
+    batch_time_meter = AverageMeter()
+    data_time_meter = AverageMeter()
+    end = time.time()
+
+    model.train()
+
+    for i, batch in enumerate(train_dataloader):
+        model.train()
+        if "image" in batch:
+            images = batch["image"].to(
+                accelerator.device, memory_format=torch.contiguous_format, non_blocking=True
+            )
+            conditions = batch["class_id"].to(
+                accelerator.device, memory_format=torch.contiguous_format, non_blocking=True
+            )
+
+            # Encode images on the flight.
+            with torch.no_grad():
+                tokenizer.eval()
+                input_tokens = tokenizer.encode(images)[1]["min_encoding_indices"].reshape(images.shape[0], -1)
+        else:
+            raise ValueError(f"Not found valid keys: {batch.keys()}")
+
+        fnames = batch["__key__"]
+        data_time_meter.update(time.time() - end)
+
+        unwrap_model = accelerator.unwrap_model(model)
+
+        # Randomly masking out input tokens.
+        masked_tokens, masks = unwrap_model.masking_input_tokens(
+            input_tokens)
+            
+
+        with accelerator.accumulate([model]):
+            logits = model(masked_tokens, conditions,
+                           cond_drop_prob=config.model.generator.class_label_dropout)
+            loss, loss_dict= loss_module(logits, input_tokens, weights=masks)
+            # Gather the losses across all processes for logging.
+            mlm_logs = {}
+            for k, v in loss_dict.items():
+                mlm_logs["train/" + k] = accelerator.gather(v).mean().item()
+            accelerator.backward(loss)
+
+            if config.training.max_grad_norm is not None and accelerator.sync_gradients:
+                accelerator.clip_grad_norm_(model.parameters(), config.training.max_grad_norm)
+
+            optimizer.step()
+            lr_scheduler.step()
+
+            # Log gradient norm before zeroing it.
+            if (
+                accelerator.sync_gradients
+                and (global_step + 1) % config.experiment.log_grad_norm_every == 0
+                and accelerator.is_main_process
+            ):
+                log_grad_norm(model, accelerator, global_step + 1)
+
+            optimizer.zero_grad(set_to_none=True)
+
+        if accelerator.sync_gradients:
+            if config.training.use_ema:
+                ema_model.step(model.parameters())
+            batch_time_meter.update(time.time() - end)
+            end = time.time()
+
+            if (global_step + 1) % config.experiment.log_every == 0:
+                samples_per_second_per_gpu = (
+                    config.training.gradient_accumulation_steps * config.training.per_gpu_batch_size / batch_time_meter.val
+                )
+
+                lr = lr_scheduler.get_last_lr()[0]
+                logger.info(
+                    f"Data (t): {data_time_meter.val:0.4f}, {samples_per_second_per_gpu:0.2f}/s/gpu "
+                    f"Batch (t): {batch_time_meter.val:0.4f} "
+                    f"LR: {lr:0.6f} "
+                    f"Step: {global_step + 1} "
+                    f"Loss: {mlm_logs['train/loss']:0.4f} "
+                    f"Accuracy: {mlm_logs['train/correct_tokens']:0.4f} "
+                )
+                logs = {
+                    "lr": lr,
+                    "lr/generator": lr,
+                    "samples/sec/gpu": samples_per_second_per_gpu,
+                    "time/data_time": data_time_meter.val,
+                    "time/batch_time": batch_time_meter.val,
+                }
+                logs.update(mlm_logs)
+                accelerator.log(logs, step=global_step + 1)
+
+                # Reset batch / data time meters per log window.
+                batch_time_meter.reset()
+                data_time_meter.reset()
+
+            # Save model checkpoint.
+            if (global_step + 1) % config.experiment.save_every == 0:
+                save_path = save_checkpoint(
+                    model, config.experiment.output_dir, accelerator, global_step + 1, logger=logger)
+                # Wait for everyone to save their checkpoint.
+                accelerator.wait_for_everyone()
+
+            # Generate images.
+            if (global_step + 1) % config.experiment.generate_every == 0 and accelerator.is_main_process:
+                # Store the model parameters temporarily and load the EMA parameters to perform inference.
+                if config.training.get("use_ema", False):
+                    ema_model.store(model.parameters())
+                    ema_model.copy_to(model.parameters())
+
+                generate_images(
+                    model,
+                    tokenizer,
+                    accelerator,
+                    global_step + 1,
+                    config.experiment.output_dir,
+                    logger=logger,
+                    config=config
+                )
+
+                if config.training.get("use_ema", False):
+                    # Switch back to the original model parameters for training.
+                    ema_model.restore(model.parameters())
+
+            global_step += 1
+
+            if global_step >= config.training.max_train_steps:
+                accelerator.print(
+                    f"Finishing training: Global step is >= Max train steps: {global_step} >= {config.training.max_train_steps}"
+                )
+                break
+
+
+    return global_step
+
+
 @torch.no_grad()
 def eval_reconstruction(
     model,
@@ -607,6 +770,47 @@ def reconstruct_images(model, original_images, fnames, accelerator,
         img.save(path)
 
     model.train()
+
+
+@torch.no_grad()
+def generate_images(model, tokenizer, accelerator, 
+                    global_step, output_dir, logger, config=None):
+    model.eval()
+    tokenizer.eval()
+    logger.info("Generating images...")
+    generated_image = sample_fn(
+        accelerator.unwrap_model(model),
+        tokenizer,
+        guidance_scale=config.model.generator.get("guidance_scale", 3.0),
+        guidance_decay=config.model.generator.get("guidance_decay", "constant"),
+        guidance_scale_pow=config.model.generator.get("guidance_scale_pow", 3.0),
+        randomize_temperature=config.model.generator.get("randomize_temperature", 2.0),
+        softmax_temperature_annealing=config.model.generator.get("softmax_temperature_annealing", False),
+        num_sample_steps=config.model.generator.get("num_steps", 8),
+        device=accelerator.device,
+        return_tensor=True
+    )
+    images_for_saving, images_for_logging = make_viz_from_samples_generation(
+        generated_image)
+
+    # Log images.
+    if config.training.enable_wandb:
+        accelerator.get_tracker("wandb").log_images(
+            {"Train Generated": [images_for_saving]}, step=global_step
+        )
+    else:
+        accelerator.get_tracker("tensorboard").log_images(
+            {"Train Generated": images_for_logging}, step=global_step
+        )
+    # Log locally.
+    root = Path(output_dir) / "train_generated_images"
+    os.makedirs(root, exist_ok=True)
+    filename = f"{global_step:08}_s-generated.png"
+    path = os.path.join(root, filename)
+    images_for_saving.save(path)
+
+    model.train()
+    return
 
 
 def save_checkpoint(model, output_dir, accelerator, global_step, logger) -> Path:

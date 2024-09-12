@@ -25,7 +25,6 @@ model:
         dropout: 0.1
         attn_drop: 0.1
         num_steps: 8
-        mask_schedule_strategy: "arccos"
         class_label_dropout: 0.1
         image_seq_len: ${model.vq_model.num_latent_tokens}
         condition_num_classes: 1000
