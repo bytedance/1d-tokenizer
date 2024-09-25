@@ -1,4 +1,4 @@
-# Compact and Mighty - Image Tokenization with Only 32 Tokens for both Reconstruction and Generation!
+# (NeurIPS 2024) Compact and Mighty - Image Tokenization with Only 32 Tokens for both Reconstruction and Generation!
 
 <div align="center">
 
@@ -19,6 +19,7 @@ We present a compact 1D tokenizer which can represent an image with as few as 32
 </p>
 
 ## Updates
+- 09/25/2024: TiTok is accepted by NeurIPS 2024.
 - 09/11/2024: Release the training codes of generator based on TiTok. 
 - 08/28/2024: Release the training codes of TiTok.
 - 08/09/2024: Better support on loading pretrained weights from huggingface models, thanks for the help from [@NielsRogge](https://github.com/NielsRogge)！
@@ -185,10 +186,10 @@ The config _titok_b64.yaml_ can be replaced with _titok_s128.yaml_ or _titok_l32
 If you use our work in your research, please use the following BibTeX entry.
 
 ```BibTeX
-@article{yu2024an,
+@inproceedings{yu2024an,
   author    = {Qihang Yu and Mark Weber and Xueqing Deng and Xiaohui Shen and Daniel Cremers and Liang-Chieh Chen},
   title     = {An Image is Worth 32 Tokens for Reconstruction and Generation},
-  journal   = {arxiv: 2406.07550},
+  journal   = {NeurIPS},
   year      = {2024}
 }
 ```
