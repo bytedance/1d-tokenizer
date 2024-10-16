@@ -21,7 +21,7 @@ from einops import rearrange
 
 from modeling.modules.base_model import BaseModel
 from modeling.modules.blocks import TiTokEncoder, TiTokDecoder
-from modeling.quantizer.quantizer import VectorQuantizer
+from modeling.quantizer.quantizer import VectorQuantizer, DiagonalGaussianDistribution
 from modeling.modules.maskgit_vqgan import Encoder as Pixel_Eecoder
 from modeling.modules.maskgit_vqgan import Decoder as Pixel_Decoder
 from modeling.modules.maskgit_vqgan import VectorQuantizer as Pixel_Quantizer
@@ -69,7 +69,7 @@ class PretrainedTokenizer(nn.Module):
         return rec_images.detach()
 
 
-class TiTok(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2304.12244", "image-tokenization"], license="mit"):
+class TiTok(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2406.07550", "image-tokenization"], repo_url="https://github.com/bytedance/1d-tokenizer", license="apache-2.0"):
     def __init__(self, config):
 
         if isinstance(config, dict):
@@ -79,6 +79,14 @@ class TiTok(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2304.12244", "image-to
         self.config = config
         # This should be False for stage1 and True for stage2.
         self.finetune_decoder = config.model.vq_model.get("finetune_decoder", True)
+
+        self.quantize_mode = config.model.vq_model.get("quantize_mode", "vq")
+        if self.quantize_mode not in ["vq", "vae"]:
+            raise ValueError(f"Unsupported quantize mode {self.quantize_mode}.")
+        
+        if self.finetune_decoder and self.quantize_mode not in ["vq"]:
+            raise ValueError("Only supprot finetune_decoder with vq quantization for now.")
+
         self.encoder = TiTokEncoder(config)
         self.decoder = TiTokDecoder(config)
         
@@ -89,11 +97,16 @@ class TiTok(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2304.12244", "image-to
         
         self.apply(self._init_weights)
 
-        self.quantize = VectorQuantizer(
-            codebook_size=config.model.vq_model.codebook_size,
-            token_size=config.model.vq_model.token_size,
-            commitment_cost=config.model.vq_model.commitment_cost,
-            use_l2_norm=config.model.vq_model.use_l2_norm,)
+        if self.quantize_mode == "vq":
+            self.quantize = VectorQuantizer(
+                codebook_size=config.model.vq_model.codebook_size,
+                token_size=config.model.vq_model.token_size,
+                commitment_cost=config.model.vq_model.commitment_cost,
+                use_l2_norm=config.model.vq_model.use_l2_norm,)
+        elif self.quantize_mode == "vae":
+            self.quantize = DiagonalGaussianDistribution
+        else:
+            raise NotImplementedError
         
         if self.finetune_decoder:
             # Freeze encoder/quantizer/latent tokens
@@ -154,7 +167,13 @@ class TiTok(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2304.12244", "image-to
                 result_dict["codebook_loss"] *= 0
         else:
             z = self.encoder(pixel_values=x, latent_tokens=self.latent_tokens)
-            z_quantized, result_dict = self.quantize(z)
+            if self.quantize_mode == "vq":
+                z_quantized, result_dict = self.quantize(z)
+            elif self.quantize_mode == "vae":
+                posteriors = self.quantize(z)
+                z_quantized = posteriors.sample()
+                result_dict = posteriors
+
         return z_quantized, result_dict
     
     def decode(self, z_quantized):
@@ -167,11 +186,14 @@ class TiTok(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2304.12244", "image-to
         return decoded
     
     def decode_tokens(self, tokens):
-        tokens = tokens.squeeze(1)
-        batch, seq_len = tokens.shape # B x N
-        z_quantized = self.quantize.get_codebook_entry(
-            tokens.reshape(-1)).reshape(batch, 1, seq_len, -1)
-        z_quantized = rearrange(z_quantized, 'b h w c -> b c h w').contiguous()
+        if self.quantize_mode == "vq":
+            tokens = tokens.squeeze(1)
+            batch, seq_len = tokens.shape # B x N
+            z_quantized = self.quantize.get_codebook_entry(
+                tokens.reshape(-1)).reshape(batch, 1, seq_len, -1)
+            z_quantized = rearrange(z_quantized, 'b h w c -> b c h w').contiguous()
+        elif self.quantize_mode == "vae":
+            z_quantized = tokens
         decoded = self.decode(z_quantized)
         return decoded
     

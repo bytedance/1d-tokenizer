@@ -19,6 +19,7 @@ We present a compact 1D tokenizer which can represent an image with as few as 32
 </p>
 
 ## Updates
+- 10/16/2024: We update a set of TiTok tokenizer weights trained with an updated single-stage recipe, leading to easier training and better performance. We release the weight of different model size for both VQ and VAE variants TiTok, which we hope could facilitate the research in this area. More details will be available in a tech report later. 
 - 09/25/2024: TiTok is accepted by NeurIPS 2024.
 - 09/11/2024: Release the training codes of generator based on TiTok. 
 - 08/28/2024: Release the training codes of TiTok.
@@ -38,13 +39,18 @@ We present a compact 1D tokenizer which can represent an image with as few as 32
 ## Model Zoo
 | Dataset  | Model | Link | FID |
 | ------------- | ------------- | ------------- | ------------- |
-| ImageNet  | TiTok-L-32 Tokenizer | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/tokenizer_titok_l32.bin)| 2.21 (reconstruction) |
-| ImageNet  | TiTok-B-64 Tokenizer | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/tokenizer_titok_b64.bin) | 1.70 (reconstruction) |
-| ImageNet  | TiTok-S-128 Tokenizer | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/tokenizer_titok_s128.bin) | 1.71 (reconstruction) |
-| ImageNet  | TiTok-L-32 Generator | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/generator_titok_l32.bin) | 2.77 (generation) |
-| ImageNet  | TiTok-B-64 Generator | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/generator_titok_b64.bin) | 2.48 (generation) |
-| ImageNet  | TiTok-S-128 Generator | [checkpoint](https://huggingface.co/fun-research/TiTok/blob/main/generator_titok_s128.bin) | 1.97 (generation) |
-
+| ImageNet  | TiTok-L-32 Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_l32_imagenet)| 2.21 (reconstruction) |
+| ImageNet  | TiTok-B-64 Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_b64_imagenet) | 1.70 (reconstruction) |
+| ImageNet  | TiTok-S-128 Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_s128_imagenet) | 1.71 (reconstruction) |
+| ImageNet  | TiTok-L-32 Generator | [checkpoint](https://huggingface.co/yucornetto/generator_titok_l32_imagenet) | 2.77 (generation) |
+| ImageNet  | TiTok-B-64 Generator | [checkpoint](https://huggingface.co/yucornetto/generator_titok_b64_imagenet) | 2.48 (generation) |
+| ImageNet  | TiTok-S-128 Generator | [checkpoint](https://huggingface.co/yucornetto/generator_titok_s128_imagenet) | 1.97 (generation) |
+| ImageNet  | TiTok-BL-64 VQ Tokenizer | [checkpoint]()| 2.06 (reconstruction) |
+| ImageNet  | TiTok-BL-128 VQ Tokenizer | [checkpoint]()| 1.49 (reconstruction) |
+| ImageNet  | TiTok-SL-256 VQ Tokenizer | [checkpoint]()| 1.03 (reconstruction) |
+| ImageNet  | TiTok-LL-32 VAE Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_ll32_vae_c16_imagenet)| 1.61 (reconstruction) |
+| ImageNet  | TiTok-BL-64 VAE Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_bl64_vae_c16_imagenet)| 1.25 (reconstruction) |
+| ImageNet  | TiTok-BL-128 VAE Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_bl128_vae_c16_imagenet)| 0.84 (reconstruction) |
 Please note that these models are trained only on limited academic dataset ImageNet, and they are only for research purposes.
 
 ## Installation
@@ -53,7 +59,6 @@ pip3 install -r requirements.txt
 ```
 
 ## Get Started
-
 ```python
 import torch
 from PIL import Image
@@ -63,6 +68,10 @@ from huggingface_hub import hf_hub_download
 from modeling.maskgit import ImageBert
 from modeling.titok import TiTok
 
+# Choose one from ["tokenizer_titok_l32_imagenet", "tokenizer_titok_b64_imagenet",
+#  "tokenizer_titok_s128_imagenet", "tokenizer_titok_bl128_vae_c16_imagenet", tokenizer_titok_bl64_vae_c16_imagenet",
+# "tokenizer_titok_ll32_vae_c16_imagenet", "tokenizer_titok_sl256_vq8k_imagenet", "tokenizer_titok_bl128_vq8k_imagenet",
+# "tokenizer_titok_bl64_vq8k_imagenet",]
 titok_tokenizer = TiTok.from_pretrained("yucornetto/tokenizer_titok_l32_imagenet")
 titok_tokenizer.eval()
 titok_tokenizer.requires_grad_(False)
@@ -75,7 +84,7 @@ titok_generator.requires_grad_(False)
 # hf_hub_download(repo_id="fun-research/TiTok", filename="generator_titok_l32.bin", local_dir="./")
 
 # load config
-# config = demo_util.get_config("configs/titok_l32.yaml")
+# config = demo_util.get_config("configs/infer/titok_l32.yaml")
 # titok_tokenizer = demo_util.get_titok_tokenizer(config)
 # titok_generator = demo_util.get_titok_generator(config)
 
@@ -125,17 +134,17 @@ wget https://openaipublic.blob.core.windows.net/diffusion/jul-2021/ref_batches/i
 ```
 ```python
 # Reproducing TiTok-L-32
-torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet.py config=configs/titok_l32.yaml experiment.output_dir="titok_l_32"
+torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet.py config=configs/infer/titok_l32.yaml experiment.output_dir="titok_l_32"
 # Run eval script. The result FID should be ~2.77
 python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_l_32.npz
 
 # Reproducing TiTok-B-64
-torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet.py config=configs/titok_b64.yaml experiment.output_dir="titok_b_64"
+torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet.py config=configs/infer/titok_b64.yaml experiment.output_dir="titok_b_64"
 # Run eval script. The result FID should be ~2.48
 python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_b_64.npz
 
 # Reproducing TiTok-S-128
-torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet.py config=configs/titok_s128.yaml experiment.output_dir="titok_s_128"
+torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet.py config=configs/infer/titok_s128.yaml experiment.output_dir="titok_s_128"
 # Run eval script. The result FID should be ~1.97
 python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_s_128.npz
 ```
