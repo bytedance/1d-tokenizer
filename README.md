@@ -45,9 +45,9 @@ We present a compact 1D tokenizer which can represent an image with as few as 32
 | TiTok-L-32 Generator | [checkpoint](https://huggingface.co/yucornetto/generator_titok_l32_imagenet) | 2.77 (generation) |
 | TiTok-B-64 Generator | [checkpoint](https://huggingface.co/yucornetto/generator_titok_b64_imagenet) | 2.48 (generation) |
 | TiTok-S-128 Generator | [checkpoint](https://huggingface.co/yucornetto/generator_titok_s128_imagenet) | 1.97 (generation) |
-| TiTok-BL-64 VQ Tokenizer | [checkpoint]()| 2.06 (reconstruction) |
-| TiTok-BL-128 VQ Tokenizer | [checkpoint]()| 1.49 (reconstruction) |
-| TiTok-SL-256 VQ Tokenizer | [checkpoint]()| 1.03 (reconstruction) |
+| TiTok-BL-64 VQ Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_bl64_vq8k_imagenet)| 2.06 (reconstruction) |
+| TiTok-BL-128 VQ Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_bl128_vq8k_imagenet)| 1.49 (reconstruction) |
+| TiTok-SL-256 VQ Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_sl256_vq8k_imagenet)| 1.03 (reconstruction) |
 | TiTok-LL-32 VAE Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_ll32_vae_c16_imagenet)| 1.61 (reconstruction) |
 | TiTok-BL-64 VAE Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_bl64_vae_c16_imagenet)| 1.25 (reconstruction) |
 | TiTok-BL-128 VAE Tokenizer | [checkpoint](https://huggingface.co/yucornetto/tokenizer_titok_bl128_vae_c16_imagenet)| 0.84 (reconstruction) |
@@ -97,7 +97,13 @@ titok_generator = titok_generator.to(device)
 img_path = "assets/ILSVRC2012_val_00010240.png"
 image = torch.from_numpy(np.array(Image.open(img_path)).astype(np.float32)).permute(2, 0, 1).unsqueeze(0) / 255.0
 # tokenization
-encoded_tokens = titok_tokenizer.encode(image.to(device))[1]["min_encoding_indices"]
+if titok_tokenizer.quantize_mode == "vq":
+    encoded_tokens = titok_tokenizer.encode(image.to(device))[1]["min_encoding_indices"]
+elif titok_tokenizer.quantize_mode == "vae":
+    posteriors = titok_tokenizer.encode(image.to(device))[1]
+    encoded_tokens = posteriors.sample()
+else:
+    raise NotImplementedError
 # image assets/ILSVRC2012_val_00010240.png is encoded into tokens tensor([[[ 887, 3979,  349,  720, 2809, 2743, 2101,  603, 2205, 1508, 1891, 4015, 1317, 2956, 3774, 2296,  484, 2612, 3472, 2330, 3140, 3113, 1056, 3779,  654, 2360, 1901, 2908, 2169,  953, 1326, 2598]]], device='cuda:0'), with shape torch.Size([1, 1, 32])
 print(f"image {img_path} is encoded into tokens {encoded_tokens}, with shape {encoded_tokens.shape}")
 # de-tokenization
