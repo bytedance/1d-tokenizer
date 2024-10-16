@@ -1,1 +1,1 @@
-from .quantizer import VectorQuantizer
+from .quantizer import VectorQuantizer, DiagonalGaussianDistribution

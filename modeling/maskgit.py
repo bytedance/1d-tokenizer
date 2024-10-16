@@ -37,7 +37,7 @@ from modeling.modules.base_model import BaseModel
 from modeling.modules.blocks import UViTBlock
 
 
-class ImageBert(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2304.12244"], pipeline_tag="text_to_image", license="mit"):
+class ImageBert(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2406.07550", "image-generation"], repo_url="https://github.com/bytedance/1d-tokenizer", license="apache-2.0"):
     def __init__(self, config):
 
         if isinstance(config, dict):

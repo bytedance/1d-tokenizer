@@ -1,0 +1,21 @@
+experiment:
+    tokenizer_checkpoint: "tokenizer_titok_bl128_vq8k.bin"
+    output_dir: "titok_bl128_vq8k"
+model:
+    vq_model:
+        codebook_size: 8192
+        token_size: 64
+        use_l2_norm: False
+        commitment_cost: 0.25
+        # vit arch
+        vit_enc_model_size: "base"
+        vit_dec_model_size: "large"
+        vit_enc_patch_size: 16
+        vit_dec_patch_size: 16
+        num_latent_tokens: 128
+        finetune_decoder: False
+        is_legacy: False
+
+dataset:
+    preprocessing:
+        crop_size: 256

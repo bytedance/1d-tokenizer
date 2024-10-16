@@ -17,6 +17,7 @@ limitations under the License.
 Reference: 
     https://github.com/CompVis/taming-transformers/blob/master/taming/modules/vqvae/quantize.py
     https://github.com/google-research/magvit/blob/main/videogvt/models/vqvae.py
+    https://github.com/CompVis/latent-diffusion/blob/main/ldm/modules/distributions/distributions.py
 """
 from typing import Mapping, Text, Tuple
 
@@ -91,3 +92,43 @@ class VectorQuantizer(torch.nn.Module):
         if self.use_l2_norm:
             z_quantized = torch.nn.functional.normalize(z_quantized, dim=-1)
         return z_quantized
+    
+
+class DiagonalGaussianDistribution(object):
+    @autocast(enabled=False)
+    def __init__(self, parameters, deterministic=False):
+        """Initializes a Gaussian distribution instance given the parameters.
+
+        Args:
+            parameters (torch.Tensor): The parameters for the Gaussian distribution. It is expected
+                to be in shape [B, 2 * C, *], where B is batch size, and C is the embedding dimension.
+                First C channels are used for mean and last C are used for logvar in the Gaussian distribution.
+            deterministic (bool): Whether to use deterministic sampling. When it is true, the sampling results
+                is purely based on mean (i.e., std = 0).
+        """
+        self.parameters = parameters
+        self.mean, self.logvar = torch.chunk(parameters.float(), 2, dim=1)
+        self.logvar = torch.clamp(self.logvar, -30.0, 20.0)
+        self.deterministic = deterministic
+        self.std = torch.exp(0.5 * self.logvar)
+        self.var = torch.exp(self.logvar)
+        if self.deterministic:
+            self.var = self.std = torch.zeros_like(self.mean).to(device=self.parameters.device)
+
+    @autocast(enabled=False)
+    def sample(self):
+        x = self.mean.float() + self.std.float() * torch.randn(self.mean.shape).to(device=self.parameters.device)
+        return x
+
+    @autocast(enabled=False)
+    def mode(self):
+        return self.mean
+
+    @autocast(enabled=False)
+    def kl(self):
+        if self.deterministic:
+            return torch.Tensor([0.])
+        else:
+            return 0.5 * torch.sum(torch.pow(self.mean.float(), 2)
+                                    + self.var.float() - 1.0 - self.logvar.float(),
+                                    dim=[1, 2])
