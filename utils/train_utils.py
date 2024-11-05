@@ -23,14 +23,16 @@ import pprint
 import glob
 from collections import defaultdict
 
-from data import SimpleImageDataset
+from data import SimpleImageDataset, PretoeknizedDataSetJSONL
 import torch
+from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
 from torch.optim import AdamW
 from utils.lr_schedulers import get_scheduler
-from modeling.modules import EMAModel, ReconstructionLoss_Stage1, ReconstructionLoss_Stage2, MLMLoss
+from modeling.modules import EMAModel, ReconstructionLoss_Stage1, ReconstructionLoss_Stage2, MLMLoss, ARLoss
 from modeling.titok import TiTok, PretrainedTokenizer
 from modeling.maskgit import ImageBert, UViTBert
+from modeling.rar import RAR
 from evaluator import VQGANEvaluator
 from demo_util import get_titok_tokenizer, sample_fn
 
@@ -71,13 +73,14 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def create_pretrained_tokenizer(config, logger, accelerator):
+def create_pretrained_tokenizer(config, accelerator=None):
     if config.model.vq_model.finetune_decoder:
         # No need of pretrained tokenizer at stage2
         pretrianed_tokenizer = None
     else:
         pretrianed_tokenizer = PretrainedTokenizer(config.model.vq_model.pretrained_tokenizer_weight)
-        pretrianed_tokenizer.to(accelerator.device)
+        if accelerator is not None:
+            pretrianed_tokenizer.to(accelerator.device)
     return pretrianed_tokenizer
 
 
@@ -96,6 +99,9 @@ def create_model_and_loss_module(config, logger, accelerator,
         else:
             raise ValueError(f"Unsupported generator model_type {config.model.generator.model_type}")
         loss_cls = MLMLoss
+    elif model_type == "rar":
+        model_cls = RAR
+        loss_cls = ARLoss
     else:
         raise ValueError(f"Unsupported model_type {model_type}")
     model = model_cls(config)
@@ -145,7 +151,7 @@ def create_model_and_loss_module(config, logger, accelerator,
             model_summary_str = summary(model, input_size=input_size, depth=5,
             col_names=("input_size", "output_size", "num_params", "params_percent", "kernel_size", "mult_adds"))
             logger.info(model_summary_str)
-        elif model_type in ["maskgit"]:
+        elif model_type in ["maskgit", "rar"]:
             input_size = (1, config.model.vq_model.num_latent_tokens)
             input_data = [
                 torch.randint(0, config.model.vq_model.codebook_size, input_size),
@@ -176,7 +182,7 @@ def create_optimizer(config, logger, model, loss_module,
 
     # Exclude terms we may not want to apply weight decay.
     exclude = (lambda n, p: p.ndim < 2 or "ln" in n or "bias" in n or 'latent_tokens' in n 
-               or 'mask_token' in n or 'embedding' in n or 'norm' in n or 'gamma' in n)
+               or 'mask_token' in n or 'embedding' in n or 'norm' in n or 'gamma' in n or 'embed' in n)
     include = lambda n, p: not exclude(n, p)
     named_parameters = list(model.named_parameters())
     gain_or_bias_params = [p for n, p in named_parameters if exclude(n, p) and p.requires_grad]
@@ -262,6 +268,15 @@ def create_dataloader(config, logger, accelerator):
         random_flip=preproc_config.random_flip,
     )
     train_dataloader, eval_dataloader = dataset.train_dataloader, dataset.eval_dataloader
+
+    # potentially, use a pretokenized dataset for speed-up.
+    if dataset_config.get("pretokenization", ""):
+        train_dataloader = DataLoader(
+            PretoeknizedDataSetJSONL(dataset_config.pretokenization),
+            batch_size=config.training.per_gpu_batch_size,
+            shuffle=True, drop_last=True, pin_memory=True)
+        train_dataloader.num_batches = math.ceil(
+            config.experiment.max_train_examples / total_batch_size_without_accum)
     
     return train_dataloader, eval_dataloader
 
@@ -557,6 +572,16 @@ def train_one_epoch(config, logger, accelerator,
     return global_step
 
 
+def get_rar_random_ratio(config, cur_step):
+    randomness_anneal_start = config.model.generator.randomness_anneal_start
+    randomness_anneal_end = config.model.generator.randomness_anneal_end
+    if cur_step < randomness_anneal_start:
+        return 1.0
+    elif cur_step > randomness_anneal_end:
+        return 0.0
+    else:
+        return 1.0 - (cur_step - randomness_anneal_start) / (randomness_anneal_end - randomness_anneal_start)
+
 def train_one_epoch_generator(
                     config, logger, accelerator,
                     model, ema_model, loss_module,
@@ -564,7 +589,8 @@ def train_one_epoch_generator(
                     lr_scheduler,
                     train_dataloader,
                     tokenizer,
-                    global_step,):
+                    global_step,
+                    model_type="maskgit"):
     """One epoch training."""
     batch_time_meter = AverageMeter()
     data_time_meter = AverageMeter()
@@ -574,39 +600,63 @@ def train_one_epoch_generator(
 
     for i, batch in enumerate(train_dataloader):
         model.train()
-        if "image" in batch:
-            images = batch["image"].to(
+        if config.dataset.params.get("pretokenization", ""):
+            # the data is already pre-tokenized
+            conditions, input_tokens = batch
+            input_tokens = input_tokens.to(
                 accelerator.device, memory_format=torch.contiguous_format, non_blocking=True
             )
-            conditions = batch["class_id"].to(
+            conditions = conditions.to(
                 accelerator.device, memory_format=torch.contiguous_format, non_blocking=True
             )
-
-            # Encode images on the flight.
-            with torch.no_grad():
-                tokenizer.eval()
-                input_tokens = tokenizer.encode(images)[1]["min_encoding_indices"].reshape(images.shape[0], -1)
         else:
-            raise ValueError(f"Not found valid keys: {batch.keys()}")
+            # tokenize on the fly
+            if "image" in batch:
+                images = batch["image"].to(
+                    accelerator.device, memory_format=torch.contiguous_format, non_blocking=True
+                )
+                conditions = batch["class_id"].to(
+                    accelerator.device, memory_format=torch.contiguous_format, non_blocking=True
+                )
 
-        fnames = batch["__key__"]
+                # Encode images on the flight.
+                with torch.no_grad():
+                    tokenizer.eval()
+                    input_tokens = tokenizer.encode(images)[1]["min_encoding_indices"].reshape(images.shape[0], -1)
+            else:
+                raise ValueError(f"Not found valid keys: {batch.keys()}")
+
         data_time_meter.update(time.time() - end)
 
         unwrap_model = accelerator.unwrap_model(model)
 
-        # Randomly masking out input tokens.
-        masked_tokens, masks = unwrap_model.masking_input_tokens(
-            input_tokens)
+
+        if model_type == "maskgit":
+            # Randomly masking out input tokens.
+            masked_tokens, masks = unwrap_model.masking_input_tokens(
+                input_tokens)
+        elif model_type == "rar":
+            unwrap_model.set_random_ratio(get_rar_random_ratio(config, global_step))
+        else:
+            raise NotImplementedError
             
 
         with accelerator.accumulate([model]):
-            logits = model(masked_tokens, conditions,
-                           cond_drop_prob=config.model.generator.class_label_dropout)
-            loss, loss_dict= loss_module(logits, input_tokens, weights=masks)
+
+            if model_type == "maskgit":
+                logits = model(masked_tokens, conditions,
+                            cond_drop_prob=config.model.generator.class_label_dropout)
+                loss, loss_dict= loss_module(logits, input_tokens, weights=masks)
+            elif model_type == "rar":
+                condition = unwrap_model.preprocess_condition(
+                    conditions, cond_drop_prob=config.model.generator.class_label_dropout
+                )
+                logits, labels = model(input_tokens, condition, return_labels=True)
+                loss, loss_dict = loss_module(logits, labels)
             # Gather the losses across all processes for logging.
-            mlm_logs = {}
+            gen_logs = {}
             for k, v in loss_dict.items():
-                mlm_logs["train/" + k] = accelerator.gather(v).mean().item()
+                gen_logs["train/" + k] = accelerator.gather(v).mean().item()
             accelerator.backward(loss)
 
             if config.training.max_grad_norm is not None and accelerator.sync_gradients:
@@ -642,8 +692,8 @@ def train_one_epoch_generator(
                     f"Batch (t): {batch_time_meter.val:0.4f} "
                     f"LR: {lr:0.6f} "
                     f"Step: {global_step + 1} "
-                    f"Loss: {mlm_logs['train/loss']:0.4f} "
-                    f"Accuracy: {mlm_logs['train/correct_tokens']:0.4f} "
+                    f"Loss: {gen_logs['train/loss']:0.4f} "
+                    f"Accuracy: {gen_logs['train/correct_tokens']:0.4f} "
                 )
                 logs = {
                     "lr": lr,
@@ -652,7 +702,7 @@ def train_one_epoch_generator(
                     "time/data_time": data_time_meter.val,
                     "time/batch_time": batch_time_meter.val,
                 }
-                logs.update(mlm_logs)
+                logs.update(gen_logs)
                 accelerator.log(logs, step=global_step + 1)
 
                 # Reset batch / data time meters per log window.

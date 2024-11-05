@@ -21,6 +21,7 @@ import torch
 from omegaconf import OmegaConf
 from modeling.titok import TiTok
 from modeling.maskgit import ImageBert, UViTBert
+from modeling.rar import RAR
 
 
 def get_config_cli():
@@ -54,6 +55,16 @@ def get_titok_generator(config):
     generator.eval()
     generator.requires_grad_(False)
     return generator
+
+def get_rar_generator(config):
+    model_cls = RAR
+    generator = model_cls(config)
+    generator.load_state_dict(torch.load(config.experiment.generator_checkpoint, map_location="cpu"))
+    generator.eval()
+    generator.requires_grad_(False)
+    generator.set_random_ratio(0)
+    return generator
+
 
 @torch.no_grad()
 def sample_fn(generator,

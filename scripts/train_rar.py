@@ -1,4 +1,4 @@
-"""Training script for MaskGIT with TiTok.
+"""Training script for RAR.
 
 Copyright (2024) Bytedance Ltd. and/or its affiliates
 
@@ -26,7 +26,7 @@ from omegaconf import OmegaConf
 from utils.logger import setup_logger
 
 from utils.train_utils import (
-    get_config, create_model_and_loss_module, get_titok_tokenizer,
+    get_config, create_model_and_loss_module, create_pretrained_tokenizer,
     create_optimizer, create_lr_scheduler, create_dataloader,
     auto_resume, save_checkpoint, 
     train_one_epoch_generator)
@@ -61,7 +61,7 @@ def main():
         split_batches=False,
     )
 
-    logger = setup_logger(name="TiTok-Gen", log_level="INFO",
+    logger = setup_logger(name="RAR", log_level="INFO",
      output_file=f"{output_dir}/log{accelerator.process_index}.txt")
 
     # We need to initialize the trackers we use, and also store our configuration.
@@ -77,11 +77,19 @@ def main():
     if config.training.seed is not None:
         set_seed(config.training.seed, device_specific=True)
 
-    tokenizer = get_titok_tokenizer(config)
+    if accelerator.local_process_index == 0:
+        # download the maskgit-vq tokenizer weight
+        from huggingface_hub import hf_hub_download
+        hf_hub_download(repo_id="fun-research/TiTok", filename=f"{config.model.vq_model.pretrained_tokenizer_weight}", local_dir="./")
+        hf_hub_download(repo_id="yucornetto/RAR", filename=f"{config.dataset.params.pretokenization}", local_dir="./")
+    accelerator.wait_for_everyone()
+
+    # get maskgit-vq tokenizer
+    tokenizer = create_pretrained_tokenizer(config)
     tokenizer.to(accelerator.device)
 
     model, ema_model, loss_module = create_model_and_loss_module(
-        config, logger, accelerator, model_type="maskgit")
+        config, logger, accelerator, model_type="rar")
 
     optimizer, _ = create_optimizer(config, logger, model, loss_module,
                                     need_discrminator=False)
@@ -141,7 +149,7 @@ def main():
                             train_dataloader,
                             tokenizer,
                             global_step,
-                            model_type="maskgit")
+                            model_type="rar")
         # Stop training if max steps is reached.
         if global_step >= config.training.max_train_steps:
             accelerator.print(

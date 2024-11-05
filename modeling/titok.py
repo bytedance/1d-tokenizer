@@ -67,6 +67,10 @@ class PretrainedTokenizer(nn.Module):
         rec_images = self.decoder(quantized_states)
         rec_images = torch.clamp(rec_images, 0.0, 1.0)
         return rec_images.detach()
+    
+    @torch.no_grad()
+    def decode_tokens(self, codes):
+        return self.decode(codes)
 
 
 class TiTok(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2406.07550", "image-tokenization"], repo_url="https://github.com/bytedance/1d-tokenizer", license="apache-2.0"):

@@ -82,8 +82,14 @@ def main():
     if config.training.seed is not None:
         set_seed(config.training.seed, device_specific=True)
 
+    if accelerator.local_process_index == 0:
+        # download the maskgit-vq tokenizer weight
+        from huggingface_hub import hf_hub_download
+        hf_hub_download(repo_id="fun-research/TiTok", filename=f"{config.model.vq_model.pretrained_tokenizer_weight}", local_dir="./")
+        
+    accelerator.wait_for_everyone()
+
     pretrained_tokenizer = create_pretrained_tokenizer(config,
-                                                       logger,
                                                        accelerator)
 
     model, ema_model, loss_module = create_model_and_loss_module(
