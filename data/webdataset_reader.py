@@ -11,8 +11,12 @@ Reference:
 import math
 from typing import List, Union, Text
 import webdataset as wds
+import torch
 from torch.utils.data import default_collate
 from torchvision import transforms
+from torch.utils.data import Dataset
+import linecache
+import json
 
 
 def filter_keys(key_set):
@@ -203,3 +207,21 @@ class SimpleImageDataset:
     @property
     def eval_dataloader(self):
         return self._eval_dataloader
+    
+
+class PretoeknizedDataSetJSONL(Dataset):
+    def __init__(self, data_path):
+        super().__init__()
+        self.jsonl_file = data_path
+        self.num_lines = sum(1 for _ in open(self.jsonl_file))
+        # Ensure the file is cached
+        linecache.checkcache(self.jsonl_file)
+        print("Number of data:", self.num_lines)
+
+    def __len__(self):
+        return self.num_lines
+
+    def __getitem__(self, idx):
+        line = linecache.getline(self.jsonl_file, idx + 1).strip()
+        data = json.loads(line)
+        return torch.tensor(data["class_id"]), torch.tensor(data["tokens"])
