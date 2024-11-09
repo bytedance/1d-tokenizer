@@ -63,7 +63,7 @@ If you use our work in your research, please use the following BibTeX entry.
 ```
 
 ```BibTeX
-@inproceedings{yu2024an,
+@article{yu2024an,
   author    = {Qihang Yu and Mark Weber and Xueqing Deng and Xiaohui Shen and Daniel Cremers and Liang-Chieh Chen},
   title     = {An Image is Worth 32 Tokens for Reconstruction and Generation},
   journal   = {NeurIPS},
