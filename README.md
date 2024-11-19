@@ -7,7 +7,7 @@ This repo hosts the code and models for the following projects:
 - TiTok: [An Image is Worth 32 Tokens for Reconstruction and Generation](https://yucornetto.github.io/projects/titok.html)
 
 
-## Short Intro on [Randomized Autoregressive Visual Generation](https://arxiv.org/abs/2406.07550) ([README](README_RAR.md))
+## Short Intro on [Randomized Autoregressive Visual Generation](https://arxiv.org/abs/2411.00776) ([README](README_RAR.md))
 
 RAR is a an autoregressive (AR) image generator with full compatibility to language modeling. It introduces a randomness annealing strategy with permuted objective at no additional cost, which enhances the model's ability to learn bidirectional contexts while leaving the autoregressive framework intact. RAR sets a FID score 1.48, demonstrating state-of-the-art performance on ImageNet-256 benchmark and significantly outperforming prior AR image generators.
 
