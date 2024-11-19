@@ -1,6 +1,15 @@
 # Randomized Autoregressive Visual Generation
 
 
+<div align="center">
+
+[![demo](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Online_Demo-blue)](https://huggingface.co/spaces/yucornetto/RAR)&nbsp;&nbsp;
+[![Website](https://img.shields.io/badge/Project-Website-87CEEB)](https://yucornetto.github.io/projects/rar.html)&nbsp;&nbsp;
+[![paper](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2411.00776)&nbsp;&nbsp;
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/randomized-autoregressive-visual-generation/image-generation-on-imagenet-256x256)](https://paperswithcode.com/sota/image-generation-on-imagenet-256x256?p=randomized-autoregressive-visual-generation)
+
+</div>
+
 RAR is a an autoregressive (AR) image generator with full compatibility to language modeling. It introduces a randomness annealing strategy with permuted objective at no additional cost, which enhances the model's ability to learn bidirectional contexts while leaving the autoregressive framework intact. RAR sets a FID score 1.48, demonstrating state-of-the-art performance on ImageNet-256 benchmark and significantly outperforming prior AR image generators.
 
 
@@ -33,6 +42,54 @@ Please note that these models are trained only on limited academic dataset Image
 ## Installation
 ```shell
 pip3 install -r requirements.txt
+```
+
+## Get Started
+```python
+import torch
+from PIL import Image
+import numpy as np
+import demo_util
+from huggingface_hub import hf_hub_download
+from utils.train_utils import create_pretrained_tokenizer
+
+
+# Choose one from ["rar_b_imagenet", "rar_l_imagenet", "rar_xl_imagenet", "rar_xxl_imagenet"]
+rar_model_size = ["rar_b", "rar_l", "rar_xl", "rar_xxl"][3]
+
+# download the maskgit-vq tokenizer
+hf_hub_download(repo_id="fun-research/TiTok", filename=f"maskgit-vqgan-imagenet-f16-256.bin", local_dir="./")
+# download the rar generator weight
+hf_hub_download(repo_id="yucornetto/RAR", filename=f"{rar_model_size}.bin", local_dir="./")
+
+# load config
+config = demo_util.get_config("configs/training/generator/rar.yaml")
+config.experiment.generator_checkpoint = f"{rar_model_size}.bin"
+config.model.generator.hidden_size = {"rar_b": 768, "rar_l": 1024, "rar_xl": 1280, "rar_xxl": 1408}[rar_model_size]
+config.model.generator.num_hidden_layers = {"rar_b": 24, "rar_l": 24, "rar_xl": 32, "rar_xxl": 40}[rar_model_size]
+config.model.generator.num_attention_heads = 16
+config.model.generator.intermediate_size = {"rar_b": 3072, "rar_l": 4096, "rar_xl": 5120, "rar_xxl": 6144}[rar_model_size]
+
+
+device = "cuda"
+# maskgit-vq as tokenizer
+tokenizer = create_pretrained_tokenizer(config)
+generator = demo_util.get_rar_generator(config)
+tokenizer.to(device)
+generator.to(device)
+
+# generate an image
+sample_labels = [torch.randint(0, 999, size=(1,)).item()] # random IN-1k class
+generated_image = demo_util.sample_fn(
+    generator=generator,
+    tokenizer=tokenizer,
+    labels=sample_labels,
+    randomize_temperature=1.0,
+    guidance_scale=4.0,
+    guidance_scale_pow=0.0, # constant cfg
+    device=device
+)
+Image.fromarray(generated_image[0]).save(f"assets/rar_generated_{sample_labels[0]}.png")
 ```
 
 ## Testing on ImageNet-1K Benchmark
