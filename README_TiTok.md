@@ -151,6 +151,8 @@ We use [webdataset](https://github.com/webdataset/webdataset) format for data lo
 
 Furthermore, the stage1 training relies on a pre-trained MaskGIT-VQGAN to generate proxy codes as learning targets. You can convert the [official Jax weight](https://github.com/google-research/maskgit) to PyTorch version using [this script](https://github.com/huggingface/open-muse/blob/main/scripts/convert_maskgit_vqgan.py). Alternatively, we provided a converted version at [HuggingFace](https://huggingface.co/fun-research/TiTok/blob/main/maskgit-vqgan-imagenet-f16-256.bin) and [Google Drive](https://drive.google.com/file/d/1DjZqzJrUt2hwpmUPkjGSBTFEJcOkLY-Q/view?usp=sharing). The MaskGIT-VQGAN's weight will be automatically downloaded when you run the training script.
 
+You may also pretokenize the dataset for a training speedup, please refer to the [example pretokenization script](scripts/pretokenization.py).
+
 ## Training
 We provide example commands to train TiTok as follows:
 ```bash
