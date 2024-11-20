@@ -161,6 +161,8 @@ python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.np
 ## Training Preparation
 We pretokenize the whole dataset for speed-up the training process. We have uploaded [it](https://huggingface.co/yucornetto/RAR/blob/main/maskgitvq.jsonl) so you can train RAR directly. The training script will download the prerequisite checkpoints and dataset automatically.
 
+For pretokenization on your own tokenizer or dataset, please refer to the [example pretokenization script](scripts/pretokenization.py).
+
 ## Training
 We provide example commands to train RAR as follows:
 ```bash
