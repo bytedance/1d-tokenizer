@@ -159,12 +159,13 @@ class TiTok(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2406.07550", "image-to
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
 
-    def encode(self, x):
+    def encode(self, x, drop_p=0.0):
         if self.finetune_decoder:
             with torch.no_grad():
                 self.encoder.eval()
                 self.quantize.eval()
                 z = self.encoder(pixel_values=x, latent_tokens=self.latent_tokens)
+                print(z.shape)
                 z_quantized, result_dict = self.quantize(z)
                 result_dict["quantizer_loss"] *= 0
                 result_dict["commitment_loss"] *= 0
