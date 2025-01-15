@@ -73,7 +73,7 @@ If you use our work in your research, please use the following BibTeX entry.
 @article{kim2025democratizing,
   author    = {Kim, Dongwon and He, Ju and Yu, Qihang Yu and Yang, Chenglin and Shen, Xiaohui and Kwak, Suha and Chen Liang-Chieh},
   title     = {Democratizing Text-to-Image Masked Generative Models with Compact Text-Aware One-Dimensional Tokens},
-  journal   = {arXiv preprint arXiv:},
+  journal   = {arXiv preprint arXiv:2501.07730},
   year      = {2025}
 }
 ```
