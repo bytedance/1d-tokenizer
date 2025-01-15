@@ -49,7 +49,7 @@ We present a compact 1D tokenizer which can represent an image with as few as 32
 See more details at [README_TiTok](README_TiTok.md).
 
 ## Updates
-- 01/14/2025: The [tech report](https://arxiv.org/abs/2411.00776) of MaskGen is available.
+- 01/14/2025: The [tech report](https://arxiv.org/abs/2501.07730) of MaskGen is available. MaskGen is a powerful and efficient text-to-image masked generative model trained exclusively on open-data. For more details, refer to the [README_MaskGen](README_MaskGen.md).
 - 11/04/2024: We release the [tech report](https://arxiv.org/abs/2411.00776) and code for RAR models.
 - 10/16/2024: We update a set of TiTok tokenizer weights trained with an updated single-stage recipe, leading to easier training and better performance. We release the weight of different model size for both VQ and VAE variants TiTok, which we hope could facilitate the research in this area. More details will be available in a tech report later. 
 - 09/25/2024: TiTok is accepted by NeurIPS 2024.
