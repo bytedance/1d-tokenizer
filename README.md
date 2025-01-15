@@ -2,10 +2,25 @@
 
 This repo hosts the code and models for the following projects:
 
+- MaskGen: [Democratizing Text-to-Image Masked Generative Models with Compact Text-Aware One-Dimensional Tokens](https://tacju.github.io/projects/maskgen.html)
+
 - RAR: [Randomized Autoregressive Visual Generation](https://yucornetto.github.io/projects/rar.html)
 
 - TiTok: [An Image is Worth 32 Tokens for Reconstruction and Generation](https://yucornetto.github.io/projects/titok.html)
 
+## Short Intro on [Democratizing Text-to-Image Masked Generative Models with Compact Text-Aware One-Dimensional Tokens](https://arxiv.org/abs/2501.07730) ([README](README_MaskGen.md))
+
+We introduce TA-TiTok, a novel text-aware transformer-based 1D tokenizer designed to handle both discrete and continuous tokens while effectively aligning reconstructions with textual descriptions.
+Building on TA-TiTok, we present MaskGen, a versatile text-to-image masked generative model framework. Trained exclusively on open data, MaskGen demonstrates outstanding performance: with 32 continuous tokens, it achieves a FID score of 6.53 on MJHQ-30K, and with 128 discrete tokens, it attains an overall score of 0.57 on GenEval.
+
+<p>
+<img src="assets/tatitok_overview.png" alt="teaser" width=90% height=90%>
+</p>
+<p>
+<img src="assets/maskgen_overview.png" alt="teaser" width=90% height=90%>
+</p>
+
+See more details at [README_MaskGen](README_MaskGen.md).
 
 ## Short Intro on [Randomized Autoregressive Visual Generation](https://arxiv.org/abs/2411.00776) ([README](README_RAR.md))
 
@@ -34,6 +49,7 @@ We present a compact 1D tokenizer which can represent an image with as few as 32
 See more details at [README_TiTok](README_TiTok.md).
 
 ## Updates
+- 01/14/2025: The [tech report](https://arxiv.org/abs/2501.07730) of MaskGen is available. MaskGen is a powerful and efficient text-to-image masked generative model trained exclusively on open-data. For more details, refer to the [README_MaskGen](README_MaskGen.md).
 - 11/04/2024: We release the [tech report](https://arxiv.org/abs/2411.00776) and code for RAR models.
 - 10/16/2024: We update a set of TiTok tokenizer weights trained with an updated single-stage recipe, leading to easier training and better performance. We release the weight of different model size for both VQ and VAE variants TiTok, which we hope could facilitate the research in this area. More details will be available in a tech report later. 
 - 09/25/2024: TiTok is accepted by NeurIPS 2024.
@@ -54,6 +70,15 @@ pip3 install -r requirements.txt
 If you use our work in your research, please use the following BibTeX entry.
 
 ```BibTeX
+@article{kim2025democratizing,
+  author    = {Kim, Dongwon and He, Ju and Yu, Qihang Yu and Yang, Chenglin and Shen, Xiaohui and Kwak, Suha and Chen Liang-Chieh},
+  title     = {Democratizing Text-to-Image Masked Generative Models with Compact Text-Aware One-Dimensional Tokens},
+  journal   = {arXiv preprint arXiv:2501.07730},
+  year      = {2025}
+}
+```
+
+```BibTeX
 @article{yu2024randomized,
   author    = {Qihang Yu and Ju He and Xueqing Deng and Xiaohui Shen and Liang-Chieh Chen},
   title     = {Randomized Autoregressive Visual Generation},
@@ -72,6 +97,8 @@ If you use our work in your research, please use the following BibTeX entry.
 ```
 
 ## Acknowledgement
+
+[MAR](https://github.com/LTH14/mar)
 
 [MaskGIT](https://github.com/google-research/maskgit)
 
