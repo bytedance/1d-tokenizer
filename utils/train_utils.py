@@ -327,6 +327,8 @@ def create_evaluator(config, logger, accelerator):
             enable_codebook_usage_measure=False,
             enable_codebook_entropy_measure=False,
         )
+    else:
+        raise NotImplementedError
     return evaluator
 
 
@@ -398,8 +400,6 @@ def train_one_epoch(config, logger, accelerator,
                 text_guidance = clip_encoder.transformer(text_guidance, attn_mask=clip_encoder.attn_mask)
                 text_guidance = text_guidance.permute(1, 0, 2)  # LND -> NLD
                 text_guidance = clip_encoder.ln_final(text_guidance)  # [batch_size, n_ctx, transformer.width]
-        else:
-            raise ValueError(f"Not found valid keys: {batch.keys()}")
 
         fnames = batch["__key__"]
         data_time_meter.update(time.time() - end)
@@ -437,6 +437,8 @@ def train_one_epoch(config, logger, accelerator,
                     global_step,
                     mode="generator",
                 )
+            else:
+                raise NotImplementedError
 
             # Gather the losses across all processes for logging.
             autoencoder_logs = {}

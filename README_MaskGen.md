@@ -124,7 +124,7 @@ reconstructed_image = Image.fromarray(reconstructed_image).save("assets/ILSVRC20
 ```
 
 ## Training Preparation
-We use [webdataset](https://github.com/webdataset/webdataset) format for data loading. To begin with, it is needed to convert the dataset into webdataset format. An example script to convert ImageNet to wds format is provided [here](./data/convert_imagenet_to_wds.py).
+We use [webdataset](https://github.com/webdataset/webdataset) format for data loading. To begin with, it is needed to convert the dataset into webdataset format.
 
 ## Training
 We provide example commands to train TA-TiTok as follows:

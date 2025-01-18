@@ -167,6 +167,8 @@ class SimpleImageDataset:
                     handler=wds.warn_and_continue,
                 ),
             ]
+        else:
+            raise NotImplementedError
 
         test_processing_pipeline = [
             wds.decode(wds.autodecode.ImageHandler("pil", extensions=["webp", "png", "jpg", "jpeg"])),
