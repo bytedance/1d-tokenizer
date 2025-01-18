@@ -20,6 +20,7 @@ import torch
 
 from omegaconf import OmegaConf
 from modeling.titok import TiTok
+from modeling.tatitok import TATiTok
 from modeling.maskgit import ImageBert, UViTBert
 from modeling.rar import RAR
 
@@ -38,6 +39,13 @@ def get_config(config_path):
 
 def get_titok_tokenizer(config):
     tokenizer = TiTok(config)
+    tokenizer.load_state_dict(torch.load(config.experiment.tokenizer_checkpoint, map_location="cpu"))
+    tokenizer.eval()
+    tokenizer.requires_grad_(False)
+    return tokenizer
+
+def get_tatitok_tokenizer(config):
+    tokenizer = TATiTok(config)
     tokenizer.load_state_dict(torch.load(config.experiment.tokenizer_checkpoint, map_location="cpu"))
     tokenizer.eval()
     tokenizer.requires_grad_(False)

@@ -374,3 +374,45 @@ class TiTokDecoder(nn.Module):
         x = self.ffn(x.contiguous())
         x = self.conv_out(x)
         return x
+
+
+class TATiTokDecoder(TiTokDecoder):
+    def __init__(self, config):
+        super().__init__(config)
+        scale = self.width ** -0.5
+        self.text_context_length = config.model.vq_model.get("text_context_length", 77)
+        self.text_embed_dim = config.model.vq_model.get("text_embed_dim", 768)
+        self.text_guidance_proj = nn.Linear(self.text_embed_dim, self.width)
+        self.text_guidance_positional_embedding = nn.Parameter(scale * torch.randn(self.text_context_length, self.width))
+
+    def forward(self, z_quantized, text_guidance):
+        N, C, H, W = z_quantized.shape
+        assert H == 1 and W == self.num_latent_tokens, f"{H}, {W}, {self.num_latent_tokens}"
+        x = z_quantized.reshape(N, C*H, W).permute(0, 2, 1) # NLD
+        x = self.decoder_embed(x)
+
+        batchsize, seq_len, _ = x.shape
+
+        mask_tokens = self.mask_token.repeat(batchsize, self.grid_size**2, 1).to(x.dtype)
+        mask_tokens = torch.cat([_expand_token(self.class_embedding, mask_tokens.shape[0]).to(mask_tokens.dtype),
+                                    mask_tokens], dim=1)
+        mask_tokens = mask_tokens + self.positional_embedding.to(mask_tokens.dtype)
+        x = x + self.latent_token_positional_embedding[:seq_len]
+        x = torch.cat([mask_tokens, x], dim=1)
+
+        text_guidance = self.text_guidance_proj(text_guidance)
+        text_guidance = text_guidance + self.text_guidance_positional_embedding
+        x = torch.cat([x, text_guidance], dim=1)
+        
+        x = self.ln_pre(x)
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        for i in range(self.num_layers):
+            x = self.transformer[i](x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = x[:, 1:1+self.grid_size**2] # remove cls embed
+        x = self.ln_post(x)
+        # N L D -> N D H W
+        x = x.permute(0, 2, 1).reshape(batchsize, self.width, self.grid_size, self.grid_size)
+        x = self.ffn(x.contiguous())
+        x = self.conv_out(x)
+        return x

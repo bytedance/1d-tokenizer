@@ -76,7 +76,7 @@ titok_generator.requires_grad_(False)
 # hf_hub_download(repo_id="fun-research/TiTok", filename="generator_titok_l32.bin", local_dir="./")
 
 # load config
-# config = demo_util.get_config("configs/infer/titok_l32.yaml")
+# config = demo_util.get_config("configs/infer/TiTok/titok_l32.yaml")
 # titok_tokenizer = demo_util.get_titok_tokenizer(config)
 # titok_generator = demo_util.get_titok_generator(config)
 
@@ -132,17 +132,17 @@ wget https://openaipublic.blob.core.windows.net/diffusion/jul-2021/ref_batches/i
 ```
 ```python
 # Reproducing TiTok-L-32
-torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet_titok.py config=configs/infer/titok_l32.yaml experiment.output_dir="titok_l_32"
+torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet_titok.py config=configs/infer/TiTok/titok_l32.yaml experiment.output_dir="titok_l_32"
 # Run eval script. The result FID should be ~2.77
 python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_l_32.npz
 
 # Reproducing TiTok-B-64
-torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet_titok.py config=configs/infer/titok_b64.yaml experiment.output_dir="titok_b_64"
+torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet_titok.py config=configs/infer/TiTok/titok_b64.yaml experiment.output_dir="titok_b_64"
 # Run eval script. The result FID should be ~2.48
 python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_b_64.npz
 
 # Reproducing TiTok-S-128
-torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet_titok.py config=configs/infer/titok_s128.yaml experiment.output_dir="titok_s_128"
+torchrun --nnodes=1 --nproc_per_node=8 --rdzv-endpoint=localhost:9999 sample_imagenet_titok.py config=configs/infer/TiTok/titok_s128.yaml experiment.output_dir="titok_s_128"
 # Run eval script. The result FID should be ~1.97
 python3 guided-diffusion/evaluations/evaluator.py VIRTUAL_imagenet256_labeled.npz titok_s_128.npz
 ```
@@ -158,14 +158,14 @@ We provide example commands to train TiTok as follows:
 ```bash
 # Training for TiTok-B64
 # Stage 1
-WANDB_MODE=offline accelerate launch --num_machines=1 --num_processes=8 --machine_rank=0 --main_process_ip=127.0.0.1 --main_process_port=9999 --same_network scripts/train_titok.py config=configs/training/stage1/titok_b64.yaml \
+WANDB_MODE=offline accelerate launch --num_machines=1 --num_processes=8 --machine_rank=0 --main_process_ip=127.0.0.1 --main_process_port=9999 --same_network scripts/train_titok.py config=configs/training/TiTok/stage1/titok_b64.yaml \
     experiment.project="titok_b64_stage1" \
     experiment.name="titok_b64_stage1_run1" \
     experiment.output_dir="titok_b64_stage1_run1" \
     training.per_gpu_batch_size=32
 
 # Stage 2
-WANDB_MODE=offline accelerate launch --num_machines=1 --num_processes=8 --machine_rank=0 --main_process_ip=127.0.0.1 --main_process_port=9999 --same_network scripts/train_titok.py config=configs/training/stage2/titok_b64.yaml \
+WANDB_MODE=offline accelerate launch --num_machines=1 --num_processes=8 --machine_rank=0 --main_process_ip=127.0.0.1 --main_process_port=9999 --same_network scripts/train_titok.py config=configs/training/TiTok/stage2/titok_b64.yaml \
     experiment.project="titok_b64_stage2" \
     experiment.name="titok_b64_stage2_run1" \
     experiment.output_dir="titok_b64_stage2_run1" \

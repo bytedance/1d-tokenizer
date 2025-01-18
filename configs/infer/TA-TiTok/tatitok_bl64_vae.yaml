@@ -1,0 +1,20 @@
+experiment:
+    tokenizer_checkpoint: "tatitok_bl64_vae.bin"
+    output_dir: "tatitok_bl64_vae"
+
+model:
+    vq_model:
+        quantize_mode: vae
+        token_size: 16
+        # vit arch
+        vit_enc_model_size: "base"
+        vit_dec_model_size: "large"
+        vit_enc_patch_size: 16
+        vit_dec_patch_size: 16
+        num_latent_tokens: 64
+        finetune_decoder: False
+        is_legacy: False
+
+dataset:
+    preprocessing:
+        crop_size: 256
