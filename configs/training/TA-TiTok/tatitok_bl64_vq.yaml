@@ -1,0 +1,81 @@
+experiment:
+    project: "tatitok_bl64_vq"
+    name: "tatitok_bl64_vq_run1"
+    output_dir: "tatitok_bl64_vq_run1"
+    max_train_examples: 685_800_000
+    save_every: 50_000
+    eval_every: 50_000
+    generate_every: 5_000
+    log_every: 50
+    log_grad_norm_every: 1_000
+    resume: True
+
+model:
+    vq_model:
+        quantize_mode: vq
+        codebook_size: 8192
+        token_size: 64
+        use_l2_norm: False
+        commitment_cost: 0.25
+        clustering_vq: True
+        # vit arch
+        vit_enc_model_size: "base"
+        vit_dec_model_size: "large"
+        vit_enc_patch_size: 16
+        vit_dec_patch_size: 16
+        num_latent_tokens: 64
+        finetune_decoder: False
+        is_legacy: False
+
+losses:
+    discriminator_start: 200_000
+    quantizer_weight: 1.0
+    discriminator_factor: 1.0
+    discriminator_weight: 0.1
+    perceptual_loss: "lpips-convnext_s-1.0-0.1"
+    perceptual_weight: 1.1
+    reconstruction_loss: "l2"
+    reconstruction_weight: 1.0
+    lecam_regularization_weight: 0.001
+
+dataset:
+    params:
+        train_shards_path_or_url: "datacomp_sharded/train/datacomp-train-{000000..140089}.tar"
+        eval_shards_path_or_url: "imagenet_sharded/val/imagenet-val-{0000..0009}.tar"
+        num_workers_per_gpu: 12
+        dataset_with_class_label: False
+        dataset_with_text_label: True
+    preprocessing:
+        resize_shorter_edge: 256
+        crop_size: 256
+        random_crop: True
+        random_flip: True
+        res_ratio_filtering: True
+
+optimizer:
+    name: adamw 
+    params:
+        learning_rate: 1e-4
+        discriminator_learning_rate: 1e-4
+        beta1: 0.9
+        beta2: 0.999
+        weight_decay: 1e-4
+
+lr_scheduler:
+    scheduler: "cosine"
+    params:
+        learning_rate: ${optimizer.params.learning_rate}
+        warmup_steps: 10_000
+        end_lr: 1e-5
+
+training:
+    gradient_accumulation_steps: 1
+    per_gpu_batch_size: 32
+    mixed_precision: "fp16"
+    enable_tf32: True
+    enable_wandb: True
+    use_ema: True
+    seed: 42
+    max_train_steps: 650_000
+    num_generated_images: 2
+    max_grad_norm: 1.0

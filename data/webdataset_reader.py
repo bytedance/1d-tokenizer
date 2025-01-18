@@ -19,11 +19,30 @@ import linecache
 import json
 
 
+def load_json(sample):
+    sample['json'] = json.loads(sample['json'].decode('utf-8'))
+    return sample
+
+
 def filter_keys(key_set):
     def _f(dictionary):
         return {k: v for k, v in dictionary.items() if k in key_set}
 
     return _f
+
+
+def filter_by_res_ratio(min_res=256, min_ratio=0.5, max_ratio=2.0):
+    def _f(sample):
+        cfg = sample['json']
+        h, w = cfg['original_height'], cfg['original_width']
+        ratio = h/w
+        longer_side = max(h, w)
+        return ratio >= min_ratio and ratio <= max_ratio and longer_side >= min_res
+    return _f
+
+
+def identity(x):
+    return x
 
 
 class ImageTransform:
@@ -93,6 +112,9 @@ class SimpleImageDataset:
         random_flip = True,
         normalize_mean: List[float] = [0., 0., 0.],
         normalize_std: List[float] = [1., 1., 1.],
+        dataset_with_class_label: bool = True,
+        dataset_with_text_label: bool = False,
+        res_ratio_filtering = False,
     ):
         """Initializes the WebDatasetReader class.
 
@@ -114,20 +136,39 @@ class SimpleImageDataset:
             resize_shorter_edge, crop_size, random_crop, random_flip,
             normalize_mean, normalize_std)
 
-        train_processing_pipeline = [
-            wds.decode(wds.autodecode.ImageHandler("pil", extensions=["webp", "png", "jpg", "jpeg"])),
-            wds.rename(
-                image="jpg;png;jpeg;webp",
-                class_id="cls",
-                handler=wds.warn_and_continue,
+        if dataset_with_class_label:
+            train_processing_pipeline = [
+                wds.decode(wds.autodecode.ImageHandler("pil", extensions=["webp", "png", "jpg", "jpeg"])),
+                wds.rename(
+                    image="jpg;png;jpeg;webp",
+                    class_id="cls",
+                    handler=wds.warn_and_continue,
+                    ),
+                wds.map(filter_keys(set(["image", "class_id", "filename"]))),
+                wds.map_dict(
+                    image=transform.train_transform,
+                    class_id=lambda x: int(x),
+                    handler=wds.warn_and_continue,
                 ),
-            wds.map(filter_keys(set(["image", "class_id", "filename"]))),
-            wds.map_dict(
-                image=transform.train_transform,
-                class_id=lambda x: int(x),
-                handler=wds.warn_and_continue,
-            ),
-        ]
+            ]
+        elif dataset_with_text_label:
+            train_processing_pipeline = [
+                wds.map(load_json),
+                wds.select(filter_by_res_ratio()) if res_ratio_filtering else wds.map(identity),
+                wds.decode(wds.autodecode.ImageHandler("pil", extensions=["webp", "png", "jpg", "jpeg"]),only=["webp", "png", "jpg", "jpeg", "txt"]),
+                wds.rename(
+                    image="jpg;png;jpeg;webp",
+                    text="txt",
+                    handler=wds.warn_and_continue,
+                    ),
+                wds.map(filter_keys(set(["image", "text", "__key__"]))),
+                wds.map_dict(
+                    image=transform.train_transform,
+                    handler=wds.warn_and_continue,
+                ),
+            ]
+        else:
+            raise NotImplementedError
 
         test_processing_pipeline = [
             wds.decode(wds.autodecode.ImageHandler("pil", extensions=["webp", "png", "jpg", "jpeg"])),
