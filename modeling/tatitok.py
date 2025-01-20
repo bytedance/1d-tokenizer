@@ -45,14 +45,13 @@ class TATiTok(TiTok, PyTorchModelHubMixin, tags=["arxiv:2501.07730", "image-toke
             self.quantize = DiagonalGaussianDistribution
         else:
             raise NotImplementedError
+        
+        del self.finetune_decoder
+        del self.pixel_quantize
+        del self.pixel_decoder
 
     def decode(self, z_quantized, text_guidance):
         decoded = self.decoder(z_quantized, text_guidance)
-        if self.finetune_decoder:
-            quantized_states = torch.einsum(
-                'nchw,cd->ndhw', decoded.softmax(1),
-                self.pixel_quantize.embedding.weight)
-            decoded = self.pixel_decoder(quantized_states)
         return decoded
     
     def decode_tokens(self, tokens, text_guidance):

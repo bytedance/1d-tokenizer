@@ -568,7 +568,7 @@ def train_one_epoch(config, logger, accelerator,
                     logger=logger,
                     config=config,
                     model_type=model_type,
-                    text_guidance=text_guidance[:config.training.num_generated_images],
+                    text_guidance=text_guidance[:config.training.num_generated_images] if model_type == "tatitok" else None,
                     pretrained_tokenizer=pretrained_tokenizer
                 )
 
