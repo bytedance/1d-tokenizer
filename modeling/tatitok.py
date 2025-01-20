@@ -45,10 +45,6 @@ class TATiTok(TiTok, PyTorchModelHubMixin, tags=["arxiv:2501.07730", "image-toke
             self.quantize = DiagonalGaussianDistribution
         else:
             raise NotImplementedError
-        
-        del self.finetune_decoder
-        del self.pixel_quantize
-        del self.pixel_decoder
 
     def decode(self, z_quantized, text_guidance):
         decoded = self.decoder(z_quantized, text_guidance)
