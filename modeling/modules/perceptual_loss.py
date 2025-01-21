@@ -26,7 +26,7 @@ _IMAGENET_STD = [0.229, 0.224, 0.225]
 
  
 class PerceptualLoss(torch.nn.Module):
-    def __init__(self, model_name: str = "lpips"):
+    def __init__(self, model_name: str = "convnext_s"):
         """Initializes the PerceptualLoss class.
 
         Args:
