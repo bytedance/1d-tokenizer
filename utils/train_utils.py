@@ -289,9 +289,9 @@ def create_dataloader(config, logger, accelerator):
         crop_size=preproc_config.crop_size,
         random_crop=preproc_config.random_crop,
         random_flip=preproc_config.random_flip,
-        dataset_with_class_label=dataset_config.dataset_with_class_label,
-        dataset_with_text_label=dataset_config.dataset_with_text_label,
-        res_ratio_filtering=preproc_config.res_ratio_filtering
+        dataset_with_class_label=dataset_config.get("dataset_with_class_label", "True"),
+        dataset_with_text_label=dataset_config.get("dataset_with_text_label", "False"),
+        res_ratio_filtering=preproc_config.get("res_ratio_filtering", "False"),
     )
     train_dataloader, eval_dataloader = dataset.train_dataloader, dataset.eval_dataloader
 
