@@ -5,7 +5,6 @@
 
 [![Website](https://img.shields.io/badge/Project-Website-87CEEB)](https://tacju.github.io/projects/maskgen.html)&nbsp;&nbsp;
 [![paper](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](http://arxiv.org/abs/2501.07730)&nbsp;&nbsp;
-[![demo](https://img.shields.io/badge/Hugging%20Face-FFD21E?logo=huggingface&logoColor=000)](https://huggingface.co/turkeyju/MaskGen)&nbsp;&nbsp;
 
 </div>
 
@@ -34,7 +33,7 @@ Building on TA-TiTok, we present MaskGen, a versatile text-to-image masked gener
 ## TODO
 
 - [x] Release training code, inference code and checkpoints of TA-TiTok (ETA: Jan 17)
-- [ ] Release training code, inference code and checkpoints of MaskGen (ETA: Jan 24)
+- [ ] Release training code, inference code and checkpoints of MaskGen (ETA: Jan 31)
 
 
 ## TA-TiTok Model Zoo
