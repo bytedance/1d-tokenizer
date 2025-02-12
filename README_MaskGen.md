@@ -32,13 +32,15 @@ Building on TA-TiTok, we present MaskGen, a versatile text-to-image masked gener
 
 ## TODO
 
-- [x] Release training code, inference code and checkpoints of TA-TiTok (ETA: Jan 17)
-- [ ] Release training code, inference code and checkpoints of MaskGen (ETA: Jan 31)
+- [ ] Release training code, inference code and checkpoints of MaskGen
 
 
 ## TA-TiTok Model Zoo
 | arch | #tokens | Link | rFID | IS |
 | ------------- | ------------- | ------------- | ------------- | ------------- |
+| VQ | 32 | [checkpoint](https://huggingface.co/turkeyju/tokenizer_tatitok_bl32_vq) | 3.95 | 219.6 |
+| VQ | 64 | [checkpoint](https://huggingface.co/turkeyju/tokenizer_tatitok_bl64_vq) | 2.43 | 218.8 |
+| VQ | 128 | [checkpoint](https://huggingface.co/turkeyju/tokenizer_tatitok_bl128_vq) | 1.53 | 222.8 |
 | KL | 32 | [checkpoint](https://huggingface.co/turkeyju/tokenizer_tatitok_bl32_vae) | 1.53 | 222.0 |
 | KL | 64 | [checkpoint](https://huggingface.co/turkeyju/tokenizer_tatitok_bl64_vae) | 1.47 | 220.7 |
 | KL | 128 | [checkpoint](https://huggingface.co/turkeyju/tokenizer_tatitok_sl128_vae) | 0.90 | 227.7 |
@@ -68,7 +70,7 @@ import demo_util
 from huggingface_hub import hf_hub_download
 from modeling.tatitok import TATiTok
 
-# Choose one from ["tokenizer_tatitok_bl32_vae", "tokenizer_tatitok_bl64_vae, tokenizer_tatitok_sl128_vae"]
+# Choose one from ["tokenizer_tatitok_bl32_vq", "tokenizer_tatitok_bl64_vq, tokenizer_tatitok_bl128_vq", "tokenizer_tatitok_bl32_vae", "tokenizer_tatitok_bl64_vae, tokenizer_tatitok_sl128_vae"]
 tatitok_tokenizer = TATiTok.from_pretrained("turkeyju/tokenizer_tatitok_bl32_vae")
 tatitok_tokenizer.eval()
 tatitok_tokenizer.requires_grad_(False)
