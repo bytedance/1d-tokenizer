@@ -26,6 +26,7 @@ import torch
 
 class SchedulerType(Enum):
     COSINE = "cosine"
+    CONSTANT = "constant"
 
 def get_cosine_schedule_with_warmup(
     optimizer: torch.optim.Optimizer,
@@ -63,8 +64,41 @@ def get_cosine_schedule_with_warmup(
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda, last_epoch)
 
 
+def get_constant_schedule_with_warmup(
+    optimizer: torch.optim.Optimizer,
+    num_warmup_steps: int,
+    num_training_steps: int,
+    base_lr: float = 1e-4,
+    end_lr: float = 0.0,
+):
+    """UViT: Creates a constant learning rate schedule with warm-up.
+
+    Args:
+        optimizer: A torch.optim.Optimizer, the optimizer for which to schedule the learning rate.
+        num_warmup_steps: An integer, the number of steps for the warmup phase.
+        num_training_steps: An integer, the total number of training steps.
+        num_cycles : A float, the number of periods of the cosine function in a schedule (the default is to 
+            just decrease from the max value to 0 following a half-cosine).
+        last_epoch: An integer, the index of the last epoch when resuming training.
+        base_lr: A float, the base learning rate.
+        end_lr: A float, the final learning rate.
+
+    Return:
+        `torch.optim.lr_scheduler.LambdaLR` with the appropriate schedule.
+    """
+
+    def lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        else:
+            return 1.0
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+
 TYPE_TO_SCHEDULER_FUNCTION = {
     SchedulerType.COSINE: get_cosine_schedule_with_warmup,
+    SchedulerType.CONSTANT: get_constant_schedule_with_warmup,
 }
 
 def get_scheduler(

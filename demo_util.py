@@ -23,6 +23,7 @@ from modeling.titok import TiTok
 from modeling.tatitok import TATiTok
 from modeling.maskgit import ImageBert, UViTBert
 from modeling.rar import RAR
+from modeling.maskgen import MaskGen_VQ, MaskGen_KL
 
 
 def get_config_cli():
@@ -71,6 +72,22 @@ def get_rar_generator(config):
     generator.eval()
     generator.requires_grad_(False)
     generator.set_random_ratio(0)
+    return generator
+
+def get_maskgen_vq_generator(config):
+    model_cls = MaskGen_VQ
+    generator = model_cls(config)
+    generator.load_state_dict(torch.load(config.experiment.generator_checkpoint, map_location="cpu"))
+    generator.eval()
+    generator.requires_grad_(False)
+    return generator
+
+def get_maskgen_kl_generator(config):
+    model_cls = MaskGen_KL
+    generator = model_cls(config)
+    generator.load_state_dict(torch.load(config.experiment.generator_checkpoint, map_location="cpu"))
+    generator.eval()
+    generator.requires_grad_(False)
     return generator
 
 

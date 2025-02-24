@@ -9,6 +9,7 @@ This repo hosts the code and models for the following projects:
 - TiTok: [An Image is Worth 32 Tokens for Reconstruction and Generation](https://yucornetto.github.io/projects/titok.html)
 
 ## Updates
+- 02/24/2025: We release the training code, inference code and model weights of MaskGen.
 - 01/17/2025: We release the training code, inference code and model weights of TA-TiTok.
 - 01/14/2025: The [tech report](https://arxiv.org/abs/2501.07730) of TA-TiTok and MaskGen is available. TA-TiTok is an innovative text-aware transformer-based 1-dimensional tokenizer designed to handle both discrete and continuous tokens. MaskGen is a powerful and efficient text-to-image masked generative model trained exclusively on open-data. For more details, refer to the [README_MaskGen](README_MaskGen.md).
 - 11/04/2024: We release the [tech report](https://arxiv.org/abs/2411.00776) and code for RAR models.

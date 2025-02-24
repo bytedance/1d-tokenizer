@@ -30,10 +30,6 @@ Building on TA-TiTok, we present MaskGen, a versatile text-to-image masked gener
 
 #### We propose MaskGen, a family of text-to-image masked generative models built upon TA-TiTok. The MaskGen VQ and MaskGen KL variants utilize compact sequences of 128 discrete tokens and 32 continuous tokens, respectively. Trained exclusively on open data, MaskGen achieves performance comparable to models trained on proprietary datasets, while offering significantly lower training cost and substantially faster inference speed.
 
-## TODO
-
-- [ ] Release training code, inference code and checkpoints of MaskGen
-
 
 ## TA-TiTok Model Zoo
 | arch | #tokens | Link | rFID | IS |
@@ -50,8 +46,8 @@ Please note that these models are only for research purposes.
 ## MaskGen Model Zoo
 | Model | arch | Link | MJHQ-30K FID | GenEval Overall |
 | ------------- | ------------- | ------------- | ------------- | ------------- |
-| MaskGen-L | KL | TODO | 7.24 | 0.52 |
-| MaskGen-XL | KL | TODO | 6.53 | 0.55 |
+| MaskGen-L | KL | [checkpoint](https://huggingface.co/turkeyju/generator_maskgen_kl_l) | 7.24 | 0.52 |
+| MaskGen-XL | KL | [checkpoint](https://huggingface.co/turkeyju/generator_maskgen_kl_xl) | 6.53 | 0.55 |
 
 Please note that these models are only for research purposes.
 
@@ -60,7 +56,7 @@ Please note that these models are only for research purposes.
 pip3 install -r requirements.txt
 ```
 
-## Get Started
+## Get Started - TA-TiTok
 ```python
 import torch
 from PIL import Image
@@ -76,7 +72,7 @@ tatitok_tokenizer.eval()
 tatitok_tokenizer.requires_grad_(False)
 
 # or alternatively, downloads from hf
-# hf_hub_download(repo_id="fun-research/TA-TiTok", filename="tokenizer_tatitok_bl32_vae.bin", local_dir="./")
+# hf_hub_download(repo_id="fun-research/TA-TiTok", filename="tatitok_bl32_vae.bin", local_dir="./")
 
 # load config
 # config = demo_util.get_config("configs/infer/TA-TiTok/tatitok_bl32_vae.yaml")
@@ -124,6 +120,78 @@ reconstructed_image = (reconstructed_image * 255.0).permute(0, 2, 3, 1).to("cpu"
 reconstructed_image = Image.fromarray(reconstructed_image).save("assets/ILSVRC2012_val_00010240_recon.png")
 ```
 
+## Get Started - MaskGen
+```python
+import torch
+from PIL import Image
+import numpy as np
+import open_clip
+import demo_util
+from huggingface_hub import hf_hub_download
+from modeling.tatitok import TATiTok
+from modeling.maskgen import MaskGen_KL
+
+torch.manual_seed(42)                 
+torch.cuda.manual_seed(42)            
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False   
+
+# Tokenizer: load tokenizer tatitok_bl32_vae
+tatitok_tokenizer = TATiTok.from_pretrained("turkeyju/tokenizer_tatitok_bl32_vae")
+tatitok_tokenizer.eval()
+tatitok_tokenizer.requires_grad_(False)
+
+# or alternatively, downloads from hf
+# hf_hub_download(repo_id="fun-research/TA-TiTok", filename="tatitok_bl32_vae.bin", local_dir="./")
+
+# load config
+# config = demo_util.get_config("configs/infer/TA-TiTok/tatitok_bl32_vae.yaml")
+# tatitok_tokenizer = demo_util.get_tatitok_tokenizer(config)
+
+# Generator: choose one from ["maskgen_kl_l", "maskgen_kl_xl"]
+maskgen_kl_generator = MaskGen_KL.from_pretrained("turkeyju/generator_maskgen_kl_xl")
+maskgen_kl_generator.eval()
+maskgen_kl_generator.requires_grad_(False)
+
+# or alternatively, downloads from hf
+# hf_hub_download(repo_id="fun-research/TA-TiTok", filename="maskgen_kl_xl.bin", local_dir="./")
+
+# load config
+# config = demo_util.get_config("configs/infer/MaskGen/maskgen_kl_xl.yaml")
+# maskgen_kl_generator = demo_util.get_maskgen_kl_generator(config)
+
+clip_encoder, _, _ = open_clip.create_model_and_transforms('ViT-L-14-336', pretrained='openai')
+del clip_encoder.visual
+clip_tokenizer = open_clip.get_tokenizer('ViT-L-14-336')
+clip_encoder.transformer.batch_first = False
+clip_encoder.eval()
+clip_encoder.requires_grad_(False)
+
+device = "cuda"
+tatitok_tokenizer = tatitok_tokenizer.to(device)
+maskgen_kl_generator = maskgen_kl_generator.to(device)
+clip_encoder = clip_encoder.to(device)
+
+# generate an image
+text = ["A cozy cabin in the middle of a snowy forest, surrounded by tall trees with lights glowing through the windows, a northern lights display visible in the sky."]
+text_guidance = clip_tokenizer(text).to(device)
+cast_dtype = clip_encoder.transformer.get_cast_dtype()
+text_guidance = clip_encoder.token_embedding(text_guidance).to(cast_dtype)  # [batch_size, n_ctx, d_model]
+text_guidance = text_guidance + clip_encoder.positional_embedding.to(cast_dtype)
+text_guidance = text_guidance.permute(1, 0, 2)  # NLD -> LND
+text_guidance = clip_encoder.transformer(text_guidance, attn_mask=clip_encoder.attn_mask)
+text_guidance = text_guidance.permute(1, 0, 2)  # LND -> NLD
+text_guidance = clip_encoder.ln_final(text_guidance)  # [batch_size, n_ctx, transformer.width]
+
+generated_tokens = maskgen_kl_generator.sample_tokens(1, clip_tokenizer, clip_encoder, num_iter=32, cfg=3.0, aes_scores=6.5, captions=text)
+
+# de-tokenization
+reconstructed_image = tatitok_tokenizer.decode_tokens(generated_tokens, text_guidance)
+reconstructed_image = torch.clamp(reconstructed_image, 0.0, 1.0)
+reconstructed_image = (reconstructed_image * 255.0).permute(0, 2, 3, 1).to("cpu", dtype=torch.uint8).numpy()[0]
+reconstructed_image = Image.fromarray(reconstructed_image).save("assets/maskgen_kl_generator_generated.png")
+```
+
 ## Training Preparation
 We use [webdataset](https://github.com/webdataset/webdataset) format for data loading. To begin with, it is needed to convert the dataset into webdataset format.
 
@@ -141,6 +209,18 @@ WANDB_MODE=offline accelerate launch --num_machines=4 --num_processes=8 --machin
     experiment.project="tatitok_bl32_vae" \
     experiment.name="tatitok_bl32_vae_run1" \
     experiment.output_dir="tatitok_bl32_vae_run1" \
+
+# Training for MaskGen-{VQ/KL}-{L/XL} Stage1
+WANDB_MODE=offline accelerate launch --num_machines=4 --num_processes=8 --machine_rank=0 --main_process_ip=127.0.0.1 --main_process_port=9999 --same_network scripts/train_maskgen.py config=configs/training/MaskGen/maskgen_{vq/kl}_{l/xl}_stage1.yaml \
+    experiment.project="maskgen_{vq/kl}_{l/xl}_stage1" \
+    experiment.name="maskgen_{vq/kl}_{l/xl}_stage1_run1" \
+    experiment.output_dir="maskgen_{vq/kl}_{l/xl}_stage1_run1" \
+
+# Training for MaskGen-{VQ/KL}-{L/XL} Stage2
+WANDB_MODE=offline accelerate launch --num_machines=4 --num_processes=8 --machine_rank=0 --main_process_ip=127.0.0.1 --main_process_port=9999 --same_network scripts/train_maskgen.py config=configs/training/MaskGen/maskgen_{vq/kl}_{l/xl}_stage2.yaml \
+    experiment.project="maskgen_{vq/kl}_{l/xl}_stage2" \
+    experiment.name="maskgen_{vq/kl}_{l/xl}_stage2_run1" \
+    experiment.output_dir="maskgen_{vq/kl}_{l/xl}_stage2_run1" \
 ```
 You may remove the flag "WANDB_MODE=offline" to support online wandb logging, if you have configured it.
 

@@ -1,0 +1,36 @@
+experiment:
+  tokenizer_checkpoint: "tatitok_bl32_vae.bin"
+  generator_checkpoint: "maskgen_kl_xl.bin"
+  
+model:
+  vq_model:
+    quantize_mode: vae
+    token_size: 16
+    vit_enc_model_size: base
+    vit_dec_model_size: large
+    vit_enc_patch_size: 16
+    vit_dec_patch_size: 16
+    num_latent_tokens: 32
+    scale_factor: 0.7525
+    finetune_decoder: False
+    is_legacy: False
+  maskgen:
+    decoder_embed_dim: 1280
+    decoder_depth: 20
+    decoder_num_heads: 16
+    micro_condition: true
+    micro_condition_embed_dim: 256
+    text_drop_prob: 0.1
+    cfg: 3.0
+    cfg_schedule: "linear"
+    num_iter: 32
+    temperature: 1.0
+    sample_aesthetic_score: 6.5
+
+losses:
+    diffloss_d: 8
+    diffloss_w: 1280
+
+dataset:
+    preprocessing:
+        crop_size: 256

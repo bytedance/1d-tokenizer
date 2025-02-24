@@ -24,7 +24,7 @@ import glob
 from collections import defaultdict
 import open_clip
 
-from data import SimpleImageDataset, PretoeknizedDataSetJSONL
+from data import SimpleImageDataset, PretoeknizedDataSetJSONL, PretokenizedWebDataset
 import torch
 from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
@@ -35,11 +35,12 @@ from modeling.titok import TiTok, PretrainedTokenizer
 from modeling.tatitok import TATiTok
 from modeling.maskgit import ImageBert, UViTBert
 from modeling.rar import RAR
+from modeling.maskgen import MaskGen_VQ, MaskGen_KL, open_clip_text_encoding
 from evaluator import VQGANEvaluator
-from demo_util import get_titok_tokenizer, sample_fn
+from demo_util import get_titok_tokenizer, get_tatitok_tokenizer, sample_fn
 
 from imagenet_classes import imagenet_idx2classname
-from utils.viz_utils import make_viz_from_samples, make_viz_from_samples_generation
+from utils.viz_utils import make_viz_from_samples, make_viz_from_samples_generation, make_viz_from_samples_t2i_generation
 from torchinfo import summary
 
 
@@ -118,6 +119,12 @@ def create_model_and_loss_module(config, logger, accelerator,
     elif model_type == "rar":
         model_cls = RAR
         loss_cls = ARLoss
+    elif model_type == "maskgen_vq":
+        model_cls = MaskGen_VQ
+        loss_cls = MLMLoss
+    elif model_type == "maskgen_kl":
+        model_cls = MaskGen_KL
+        loss_cls = None
     else:
         raise ValueError(f"Unsupported model_type {model_type}")
     model = model_cls(config)
@@ -158,7 +165,7 @@ def create_model_and_loss_module(config, logger, accelerator,
         accelerator.register_save_state_pre_hook(save_model_hook)
 
     # Create loss module along with discrminator.
-    loss_module = loss_cls(config=config)
+    loss_module = loss_cls(config=config) if loss_cls is not None else None
 
     # Print Model for sanity check.
     if accelerator.is_main_process:
@@ -183,6 +190,22 @@ def create_model_and_loss_module(config, logger, accelerator,
             model_summary_str = summary(
                 model, input_data=input_data, depth=7,
                 col_names=("input_size", "output_size", "num_params", "params_percent", "kernel_size", "mult_adds"))
+            logger.info(model_summary_str)
+        elif model_type in ["maskgen_vq"]:
+            x_size = (1, config.model.vq_model.num_latent_tokens)
+            condition_size = (1, 77, 768)
+            condition_pooled_size = (1, 1, 768)
+            aes_size = (1,)
+            input_size = [x_size, condition_size, condition_pooled_size, aes_size]
+            model_summary_str = summary(model, input_size=input_size, depth=5, col_names=("input_size", "output_size", "num_params", "params_percent", "kernel_size", "mult_adds"))
+            logger.info(model_summary_str)
+        elif model_type in ["maskgen_kl"]:
+            x_size = (1, config.model.vq_model.token_size * 2 * config.model.vq_model.num_latent_tokens)
+            condition_size = (1, 77, 768)
+            condition_pooled_size = (1, 1, 768)
+            aes_size = (1,)
+            input_size = [x_size, condition_size, condition_pooled_size, aes_size]
+            model_summary_str = summary(model, input_size=input_size, depth=5, col_names=("input_size", "output_size", "num_params", "params_percent", "kernel_size", "mult_adds"))
             logger.info(model_summary_str)
         else:
             raise NotImplementedError
@@ -277,32 +300,52 @@ def create_dataloader(config, logger, accelerator):
     preproc_config = config.dataset.preprocessing
     dataset_config = config.dataset.params
 
-    # TODO: add support on pre-tokenization dataset
-    dataset = SimpleImageDataset(
-        train_shards_path=dataset_config.train_shards_path_or_url,
-        eval_shards_path=dataset_config.eval_shards_path_or_url,
-        num_train_examples=config.experiment.max_train_examples,
-        per_gpu_batch_size=config.training.per_gpu_batch_size,
-        global_batch_size=total_batch_size_without_accum,
-        num_workers_per_gpu=dataset_config.num_workers_per_gpu,
-        resize_shorter_edge=preproc_config.resize_shorter_edge,
-        crop_size=preproc_config.crop_size,
-        random_crop=preproc_config.random_crop,
-        random_flip=preproc_config.random_flip,
-        dataset_with_class_label=dataset_config.get("dataset_with_class_label", "True"),
-        dataset_with_text_label=dataset_config.get("dataset_with_text_label", "False"),
-        res_ratio_filtering=preproc_config.get("res_ratio_filtering", "False"),
-    )
-    train_dataloader, eval_dataloader = dataset.train_dataloader, dataset.eval_dataloader
-
-    # potentially, use a pretokenized dataset for speed-up.
-    if dataset_config.get("pretokenization", ""):
-        train_dataloader = DataLoader(
-            PretoeknizedDataSetJSONL(dataset_config.pretokenization),
-            batch_size=config.training.per_gpu_batch_size,
-            shuffle=True, drop_last=True, pin_memory=True)
-        train_dataloader.num_batches = math.ceil(
-            config.experiment.max_train_examples / total_batch_size_without_accum)
+    # T2I uses a pretokenized dataset for speed-up.
+    if dataset_config.get("pretokenization", "") and dataset_config.get("dataset_with_text_label", False) is True:
+        dataset = PretokenizedWebDataset(
+            train_shards_path=dataset_config.train_shards_path_or_url,
+            eval_shards_path=dataset_config.eval_shards_path_or_url,
+            num_train_examples=config.experiment.max_train_examples,
+            per_gpu_batch_size=config.training.per_gpu_batch_size,
+            global_batch_size=total_batch_size_without_accum,
+            num_workers_per_gpu=dataset_config.num_workers_per_gpu,
+            resize_shorter_edge=preproc_config.resize_shorter_edge,
+            crop_size=preproc_config.crop_size,
+            random_crop=preproc_config.random_crop,
+            random_flip=preproc_config.random_flip,
+            normalize_mean=preproc_config.normalize_mean,
+            normalize_std=preproc_config.normalize_std,
+            process_recap=preproc_config.get("preproc_recap", True),
+            use_recap_prob=preproc_config.get("use_recap_prob", 0.95)
+        )
+        train_dataloader, eval_dataloader = dataset.train_dataloader, dataset.eval_dataloader
+    # SimpleImageDataset
+    elif dataset_config.get("pretokenization", "") and dataset_config.get("dataset_with_text_label", False) is False:
+        dataset = SimpleImageDataset(
+            train_shards_path=dataset_config.train_shards_path_or_url,
+            eval_shards_path=dataset_config.eval_shards_path_or_url,
+            num_train_examples=config.experiment.max_train_examples,
+            per_gpu_batch_size=config.training.per_gpu_batch_size,
+            global_batch_size=total_batch_size_without_accum,
+            num_workers_per_gpu=dataset_config.num_workers_per_gpu,
+            resize_shorter_edge=preproc_config.resize_shorter_edge,
+            crop_size=preproc_config.crop_size,
+            random_crop=preproc_config.random_crop,
+            random_flip=preproc_config.random_flip,
+            dataset_with_class_label=dataset_config.get("dataset_with_class_label", True),
+            dataset_with_text_label=dataset_config.get("dataset_with_text_label", False),
+            res_ratio_filtering=preproc_config.get("res_ratio_filtering", False),
+        )
+        train_dataloader, eval_dataloader = dataset.train_dataloader, dataset.eval_dataloader
+    # potentially, use a pretokenized dataset for ImageNet speed-up.
+    else:
+        if dataset_config.get("pretokenization", ""):
+            train_dataloader = DataLoader(
+                PretoeknizedDataSetJSONL(dataset_config.pretokenization),
+                batch_size=config.training.per_gpu_batch_size,
+                shuffle=True, drop_last=True, pin_memory=True)
+            train_dataloader.num_batches = math.ceil(
+                config.experiment.max_train_examples / total_batch_size_without_accum)
     
     return train_dataloader, eval_dataloader
 
@@ -819,6 +862,155 @@ def train_one_epoch_generator(
     return global_step
 
 
+def train_one_epoch_t2i_generator(
+                    config, logger, accelerator,
+                    model, ema_model, loss_module,
+                    optimizer,
+                    lr_scheduler,
+                    train_dataloader,
+                    tokenizer,
+                    clip_tokenizer,
+                    clip_encoder,
+                    global_step,
+                    model_type="maskgen_vq"):
+    """One epoch training."""
+    batch_time_meter = AverageMeter()
+    data_time_meter = AverageMeter()
+    end = time.time()
+
+    model.train()
+
+    for i, batch in enumerate(train_dataloader):
+        model.train()
+        
+        input_tokens = batch["tokens"].to(accelerator.device, memory_format=torch.contiguous_format, non_blocking=True)
+        captions = batch["text"]
+        if config.model.maskgen.micro_condition:
+            aes_scores = batch["aes_score"].to(
+                accelerator.device, memory_format=torch.contiguous_format, non_blocking=True
+            )
+        else:
+            aes_scores = None
+
+        data_time_meter.update(time.time() - end)
+
+        unwrap_model = accelerator.unwrap_model(model)
+
+        condition, condition_pooled = unwrap_model.preprocess_condition(
+            captions, clip_tokenizer, clip_encoder,
+        )
+
+        if model_type == "maskgen_vq":
+            with accelerator.accumulate([model]):
+                logits, masks = model(input_tokens, condition, condition_pooled, aes_scores)
+                t2i_gen_loss, loss_dict = loss_module(logits, input_tokens, weights=masks)
+        elif model_type == "maskgen_kl":
+            with accelerator.accumulate([model]):
+                t2i_gen_loss, loss_dict = model(input_tokens, condition, condition_pooled, aes_scores)
+        else:
+            raise NotImplementedError
+
+        with accelerator.accumulate([model]):
+            # Gather the losses across all processes for logging.
+            t2i_gen_logs = {}
+            for k, v in loss_dict.items():
+                t2i_gen_logs["train/" + k] = accelerator.gather(v).mean().item()
+            accelerator.backward(t2i_gen_loss)
+
+            if config.training.max_grad_norm is not None and accelerator.sync_gradients:
+                accelerator.clip_grad_norm_(model.parameters(), config.training.max_grad_norm)
+
+            optimizer.step()
+            lr_scheduler.step()
+
+            # Log gradient norm before zeroing it.
+            if (
+                accelerator.sync_gradients
+                and (global_step + 1) % config.experiment.log_grad_norm_every == 0
+                and accelerator.is_main_process
+            ):
+                log_grad_norm(model, accelerator, global_step + 1)
+
+            optimizer.zero_grad(set_to_none=True)
+
+        if accelerator.sync_gradients:
+            if config.training.use_ema:
+                ema_model.step(model.parameters())
+            batch_time_meter.update(time.time() - end)
+            end = time.time()
+
+            if (global_step + 1) % config.experiment.log_every == 0:
+                samples_per_second_per_gpu = (
+                    config.training.gradient_accumulation_steps * config.training.per_gpu_batch_size / batch_time_meter.val
+                )
+
+                lr = lr_scheduler.get_last_lr()[0]
+                logger.info(
+                    f"Data (t): {data_time_meter.val:0.4f}, {samples_per_second_per_gpu:0.2f}/s/gpu "
+                    f"Batch (t): {batch_time_meter.val:0.4f} "
+                    f"LR: {lr:0.6f} "
+                    f"Step: {global_step + 1} "
+                    f"Loss: {t2i_gen_logs['train/loss']:0.4f} "
+                )
+                logs = {
+                    "lr": lr,
+                    "lr/generator": lr,
+                    "samples/sec/gpu": samples_per_second_per_gpu,
+                    "time/data_time": data_time_meter.val,
+                    "time/batch_time": batch_time_meter.val,
+                }
+                logs.update(t2i_gen_logs)
+                accelerator.log(logs, step=global_step + 1)
+
+                # Reset batch / data time meters per log window.
+                batch_time_meter.reset()
+                data_time_meter.reset()
+
+            # Save model checkpoint.
+            if (global_step + 1) % config.experiment.save_every == 0:
+                save_path = save_checkpoint(
+                    model, config.experiment.output_dir, accelerator, global_step + 1, logger=logger)
+                # Wait for everyone to save their checkpoint.
+                accelerator.wait_for_everyone()
+
+            # Generate images.
+            if (global_step + 1) % config.experiment.generate_every == 0 and accelerator.is_main_process:
+                # Store the model parameters temporarily and load the EMA parameters to perform inference.
+                if config.training.get("use_ema", False):
+                    ema_model.store(model.parameters())
+                    ema_model.copy_to(model.parameters())
+
+                t2i_generate_images(
+                    model,
+                    tokenizer,
+                    captions,
+                    aes_scores,
+                    clip_tokenizer,
+                    clip_encoder,
+                    accelerator,
+                    global_step + 1,
+                    config.experiment.output_dir,
+                    logger=logger,
+                    config=config,
+                    model_type=model_type,
+                )
+
+                if config.training.get("use_ema", False):
+                    # Switch back to the original model parameters for training.
+                    ema_model.restore(model.parameters())
+
+            global_step += 1
+
+            if global_step >= config.training.max_train_steps:
+                accelerator.print(
+                    f"Finishing training: Global step is >= Max train steps: {global_step} >= {config.training.max_train_steps}"
+                )
+                break
+
+
+    return global_step
+
+
 @torch.no_grad()
 def eval_reconstruction(
     model,
@@ -944,6 +1136,72 @@ def generate_images(model, tokenizer, accelerator,
     )
     images_for_saving, images_for_logging = make_viz_from_samples_generation(
         generated_image)
+
+    # Log images.
+    if config.training.enable_wandb:
+        accelerator.get_tracker("wandb").log_images(
+            {"Train Generated": [images_for_saving]}, step=global_step
+        )
+    else:
+        accelerator.get_tracker("tensorboard").log_images(
+            {"Train Generated": images_for_logging}, step=global_step
+        )
+    # Log locally.
+    root = Path(output_dir) / "train_generated_images"
+    os.makedirs(root, exist_ok=True)
+    filename = f"{global_step:08}_s-generated.png"
+    path = os.path.join(root, filename)
+    images_for_saving.save(path)
+
+    model.train()
+    return
+
+
+@torch.no_grad()
+def t2i_generate_images(model, tokenizer, captions, aes_scores, clip_tokenizer, clip_encoder, accelerator, 
+                    global_step, output_dir, logger, config=None, model_type="maskgen_kl"):
+    model.eval()
+    tokenizer.eval()
+    local_model = accelerator.unwrap_model(model)
+    logger.info("Generating images...")
+
+    if model_type == "maskgen_vq":
+        tokens = local_model.generate(
+            captions=captions[:config.training.num_generated_images],
+            sample_aesthetic_score=aes_scores[:config.training.num_generated_images] if config.model.maskgen.micro_condition else None,
+            num_steps=config.model.maskgen.get("num_iter", 16),
+            guidance_scale=config.model.maskgen.cfg,
+            guidance_decay=config.model.maskgen.cfg_schedule,
+            clip_tokenizer=clip_tokenizer,
+            clip_encoder=clip_encoder,
+            guidance_decay_scale_pow=config.model.maskgen.cfg_decay_scale_pow,
+            randomize_temperature=config.model.maskgen.randomize_temperature,
+            softmax_temperature_annealing=config.model.maskgen.get("softmax_temperature_annealing", True),
+            prob_sorting=config.model.maskgen.get("prob_sorting", True)
+        )
+    elif model_type == "maskgen_kl":
+        tokens = local_model.sample_tokens(config.training.num_generated_images, 
+            clip_tokenizer=clip_tokenizer, clip_encoder=clip_encoder, 
+            captions=captions[:config.training.num_generated_images], 
+            aes_scores=aes_scores[:config.training.num_generated_images] if config.model.maskgen.micro_condition else None,
+            num_iter=config.model.maskgen.num_iter, cfg_schedule=config.model.maskgen.cfg_schedule,
+            cfg=config.model.maskgen.cfg, temperature=config.model.maskgen.temperature
+        )
+    else:
+        raise NotImplementedError
+
+    text_guidance = clip_tokenizer(captions[:config.training.num_generated_images]).to(accelerator.device)
+    cast_dtype = clip_encoder.transformer.get_cast_dtype()
+    text_guidance = clip_encoder.token_embedding(text_guidance).to(cast_dtype)  # [batch_size, n_ctx, d_model]
+    text_guidance = text_guidance + clip_encoder.positional_embedding.to(cast_dtype)
+    text_guidance = text_guidance.permute(1, 0, 2)  # NLD -> LND
+    text_guidance = clip_encoder.transformer(text_guidance, attn_mask=clip_encoder.attn_mask)
+    text_guidance = text_guidance.permute(1, 0, 2)  # LND -> NLD
+    text_guidance = clip_encoder.ln_final(text_guidance)  # [batch_size, n_ctx, transformer.width]
+    
+    generated_image = tokenizer.decode_tokens(tokens, text_guidance=text_guidance)
+
+    images_for_saving, images_for_logging = make_viz_from_samples_t2i_generation(generated_image, captions[:config.training.num_generated_images])
 
     # Log images.
     if config.training.enable_wandb:
