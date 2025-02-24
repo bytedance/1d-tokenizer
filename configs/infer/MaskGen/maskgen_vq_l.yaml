@@ -1,0 +1,35 @@
+experiment:
+  tokenizer_checkpoint: "tatitok_bl128_vq.bin"
+  generator_checkpoint: "maskgen_vq_l.bin"
+
+model:
+  vq_model:
+    quantize_mode: vq
+    codebook_size: 8192
+    token_size: 64
+    use_l2_norm: false
+    commitment_cost: 0.25
+    clustering_vq: true
+    vit_enc_model_size: base
+    vit_dec_model_size: large
+    vit_enc_patch_size: 16
+    vit_dec_patch_size: 16
+    num_latent_tokens: 128
+    finetune_decoder: False
+    is_legacy: False
+  maskgen:
+    decoder_embed_dim: 1024
+    decoder_depth: 16
+    decoder_num_heads: 16
+    micro_condition: true
+    micro_condition_embed_dim: 256
+    text_drop_prob: 0.1
+    condition_num_classes: 1000
+    cfg: 12.0
+    num_iter: 16
+    temperature: 2.0
+    sample_aesthetic_score: 6.5
+
+dataset:
+    preprocessing:
+        crop_size: 256

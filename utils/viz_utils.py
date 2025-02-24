@@ -18,6 +18,7 @@ limitations under the License.
 import torch
 import torchvision.transforms.functional as F
 from einops import rearrange
+from PIL import Image, ImageDraw, ImageFont
 
 def make_viz_from_samples(
     original_images,
@@ -65,3 +66,33 @@ def make_viz_from_samples_generation(
     images_for_saving = F.to_pil_image(images_for_logging)
 
     return images_for_saving, images_for_logging
+
+
+def make_viz_from_samples_t2i_generation(
+    generated_images,
+    captions,
+):
+    generated = torch.clamp(generated_images, 0.0, 1.0) * 255.0
+    images_for_logging = rearrange(
+        generated, 
+        "(l1 l2) c h w -> c (l1 h) (l2 w)",
+        l1=2)
+
+    images_for_logging = images_for_logging.cpu().byte()
+    images_for_saving = F.to_pil_image(images_for_logging)
+
+    # Create a new image with space for captions
+    width, height = images_for_saving.size
+    caption_height = 20 * len(captions) + 10
+    new_height = height + caption_height
+    new_image = Image.new("RGB", (width, new_height), "black")
+    new_image.paste(images_for_saving, (0, 0))
+
+    # Adding captions below the image
+    draw = ImageDraw.Draw(new_image)
+    font = ImageFont.load_default()
+
+    for i, caption in enumerate(captions):
+        draw.text((10, height + 10 + i * 20), caption, fill="white", font=font)
+
+    return new_image, images_for_logging

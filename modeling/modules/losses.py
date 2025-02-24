@@ -24,6 +24,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from torch.cuda.amp import autocast
+
+from modeling.diffusion import create_diffusion
+from modeling.modules.blocks import SimpleMLPAdaLN
 from .perceptual_loss import PerceptualLoss
 from .discriminator import NLayerDiscriminator
 
@@ -388,3 +391,55 @@ class ARLoss(torch.nn.Module):
         loss = self.criterion(shift_logits, shift_labels)
         correct_tokens = (torch.argmax(shift_logits, dim=1) == shift_labels).sum(dim=1) / shift_labels.size(1)
         return loss, {"loss": loss, "correct_tokens": correct_tokens.mean()}
+    
+
+class DiffLoss(nn.Module):
+    """Diffusion Loss"""
+    def __init__(self, config):
+        super(DiffLoss, self).__init__()
+        self.in_channels = config.model.vq_model.token_size
+
+        self.net = SimpleMLPAdaLN(
+            in_channels=self.in_channels,
+            model_channels=config.losses.diffloss_w,
+            out_channels=self.in_channels * 2,  # for vlb loss
+            z_channels=config.model.maskgen.decoder_embed_dim,
+            num_res_blocks=config.losses.diffloss_d,
+            grad_checkpointing=config.get("training.grad_checkpointing", False),
+        )
+
+        self.train_diffusion = create_diffusion(timestep_respacing="", noise_schedule="cosine")
+        self.gen_diffusion = create_diffusion(timestep_respacing=config.losses.get("num_sampling_steps", "100"), noise_schedule="cosine")
+
+    def forward(self, target, z, mask=None):
+        t = torch.randint(0, self.train_diffusion.num_timesteps, (target.shape[0],), device=target.device)
+        model_kwargs = dict(c=z)
+        loss_dict = self.train_diffusion.training_losses(self.net, target, t, model_kwargs)
+        loss = loss_dict["loss"]
+        if mask is not None:
+            loss = (loss * mask).sum() / mask.sum()
+
+        loss_dict = dict(
+            diff_loss=loss.clone().mean().detach(),
+        )
+
+        return loss.mean(), loss_dict
+
+    def sample(self, z, temperature=1.0, cfg=1.0):
+        # diffusion loss sampling
+        if not cfg == 1.0:
+            noise = torch.randn(z.shape[0] // 2, self.in_channels).cuda()
+            noise = torch.cat([noise, noise], dim=0)
+            model_kwargs = dict(c=z, cfg_scale=cfg)
+            sample_fn = self.net.forward_with_cfg
+        else:
+            noise = torch.randn(z.shape[0], self.in_channels).cuda()
+            model_kwargs = dict(c=z)
+            sample_fn = self.net.forward
+
+        sampled_token_latent = self.gen_diffusion.p_sample_loop(
+            sample_fn, noise.shape, noise, clip_denoised=False, model_kwargs=model_kwargs, progress=False,
+            temperature=temperature
+        )
+
+        return sampled_token_latent
