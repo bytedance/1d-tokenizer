@@ -2,6 +2,8 @@
 
 This repo hosts the code and models for the following projects:
 
+- FlowTok: [FlowTok: Flowing Seamlessly Across Text and Image Tokens](https://tacju.github.io/projects/flowtok.html)
+
 - TA-TiTok & MaskGen: [Democratizing Text-to-Image Masked Generative Models with Compact Text-Aware One-Dimensional Tokens](https://tacju.github.io/projects/maskgen.html)
 
 - RAR: [Randomized Autoregressive Visual Generation](https://yucornetto.github.io/projects/rar.html)
@@ -9,6 +11,7 @@ This repo hosts the code and models for the following projects:
 - TiTok: [An Image is Worth 32 Tokens for Reconstruction and Generation](https://yucornetto.github.io/projects/titok.html)
 
 ## Updates
+- 03/16/2025: The [tech report](https://arxiv.org/abs/2503.10772) of FlowTok is available. FlowTok is a minimal yet powerful framework that seamlessly flows across text and images by encoding images into a compact 1D token representation. Code will be released soon.
 - 02/24/2025: We release the training code, inference code and model weights of MaskGen.
 - 01/17/2025: We release the training code, inference code and model weights of TA-TiTok.
 - 01/14/2025: The [tech report](https://arxiv.org/abs/2501.07730) of TA-TiTok and MaskGen is available. TA-TiTok is an innovative text-aware transformer-based 1-dimensional tokenizer designed to handle both discrete and continuous tokens. MaskGen is a powerful and efficient text-to-image masked generative model trained exclusively on open-data. For more details, refer to the [README_MaskGen](README_MaskGen.md).
@@ -72,8 +75,17 @@ pip3 install -r requirements.txt
 If you use our work in your research, please use the following BibTeX entry.
 
 ```BibTeX
+@article{he2025flowtok,
+  author    = {Ju He and Qihang Yu and Qihao Liu and Liang-Chieh Chen},
+  title     = {FlowTok: Flowing Seamlessly Across Text and Image Tokens},
+  journal   = {arXiv preprint arXiv:2503.10772},
+  year      = {2025}
+}
+```
+
+```BibTeX
 @article{kim2025democratizing,
-  author    = {Kim, Dongwon and He, Ju and Yu, Qihang Yu and Yang, Chenglin and Shen, Xiaohui and Kwak, Suha and Chen Liang-Chieh},
+  author    = {Dongwon Kim and Ju He and Qihang Yu and Chenglin Yang and Xiaohui Shen and Suha Kwak and Liang-Chieh Chen},
   title     = {Democratizing Text-to-Image Masked Generative Models with Compact Text-Aware One-Dimensional Tokens},
   journal   = {arXiv preprint arXiv:2501.07730},
   year      = {2025}
@@ -99,6 +111,8 @@ If you use our work in your research, please use the following BibTeX entry.
 ```
 
 ## Acknowledgement
+
+[CrossFlow](https://github.com/qihao067/CrossFlow)
 
 [MAR](https://github.com/LTH14/mar)
 
