@@ -9,7 +9,7 @@ model:
         token_size: 64
         use_l2_norm: False
         commitment_cost: 0.25
-        clustering_vq: True
+        clustering_vq: False
         # vit arch
         vit_enc_model_size: "base"
         vit_dec_model_size: "large"

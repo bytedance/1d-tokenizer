@@ -261,7 +261,11 @@ class MaskGen_VQ(BaseModel, PyTorchModelHubMixin, tags=["arxiv:2501.07730", "tex
         #  [codebook_size + 1, codebook_size + nclass]  : the imagenet class tokens
         #  codebook_size + 1 + nclass                   : the class drop label
         # prepend condition token
-        input_ids, masks = self.masking_input_tokens(input_tokens)
+        if self.training:
+            input_ids, masks = self.masking_input_tokens(input_tokens)
+        else:
+            input_ids = input_tokens
+            masks = None
 
         embeddings = self.embeddings(input_ids)
 

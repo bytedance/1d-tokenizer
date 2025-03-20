@@ -46,6 +46,8 @@ Please note that these models are only for research purposes.
 ## MaskGen Model Zoo
 | Model | arch | Link | MJHQ-30K FID | GenEval Overall |
 | ------------- | ------------- | ------------- | ------------- | ------------- |
+| MaskGen-L | VQ | [checkpoint](https://huggingface.co/turkeyju/generator_maskgen_vq_l) | 7.74 | 0.53 |
+| MaskGen-XL | VQ | [checkpoint](https://huggingface.co/turkeyju/generator_maskgen_vq_xl) | 7.51 | 0.57 |
 | MaskGen-L | KL | [checkpoint](https://huggingface.co/turkeyju/generator_maskgen_kl_l) | 7.24 | 0.52 |
 | MaskGen-XL | KL | [checkpoint](https://huggingface.co/turkeyju/generator_maskgen_kl_xl) | 6.53 | 0.55 |
 
@@ -129,17 +131,22 @@ import open_clip
 import demo_util
 from huggingface_hub import hf_hub_download
 from modeling.tatitok import TATiTok
-from modeling.maskgen import MaskGen_KL
+from modeling.maskgen import MaskGen_VQ, MaskGen_KL
 
 torch.manual_seed(42)                 
 torch.cuda.manual_seed(42)            
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False   
 
-# Tokenizer: load tokenizer tatitok_bl32_vae
-tatitok_tokenizer = TATiTok.from_pretrained("turkeyju/tokenizer_tatitok_bl32_vae")
-tatitok_tokenizer.eval()
-tatitok_tokenizer.requires_grad_(False)
+# VQ Tokenizer: load tokenizer tatitok_bl128_vq
+tatitok_vq_tokenizer = TATiTok.from_pretrained("turkeyju/tokenizer_tatitok_bl128_vq")
+tatitok_vq_tokenizer.eval()
+tatitok_vq_tokenizer.requires_grad_(False)
+
+# KL Tokenizer: load tokenizer tatitok_bl32_vae
+tatitok_kl_tokenizer = TATiTok.from_pretrained("turkeyju/tokenizer_tatitok_bl32_vae")
+tatitok_kl_tokenizer.eval()
+tatitok_kl_tokenizer.requires_grad_(False)
 
 # or alternatively, downloads from hf
 # hf_hub_download(repo_id="fun-research/TA-TiTok", filename="tatitok_bl32_vae.bin", local_dir="./")
@@ -148,7 +155,19 @@ tatitok_tokenizer.requires_grad_(False)
 # config = demo_util.get_config("configs/infer/TA-TiTok/tatitok_bl32_vae.yaml")
 # tatitok_tokenizer = demo_util.get_tatitok_tokenizer(config)
 
-# Generator: choose one from ["maskgen_kl_l", "maskgen_kl_xl"]
+# VQ Generator: choose one from ["maskgen_vq_l", "maskgen_vq_xl"]
+maskgen_vq_generator = MaskGen_VQ.from_pretrained("turkeyju/generator_maskgen_vq_xl")
+maskgen_vq_generator.eval()
+maskgen_vq_generator.requires_grad_(False)
+
+# or alternatively, downloads from hf
+# hf_hub_download(repo_id="fun-research/TA-TiTok", filename="maskgen_vq_xl.bin", local_dir="./")
+
+# load config
+# config = demo_util.get_config("configs/infer/MaskGen/maskgen_vq_xl.yaml")
+# maskgen_vq_generator = demo_util.get_maskgen_vq_generator(config)
+
+# KL Generator: choose one from ["maskgen_kl_l", "maskgen_kl_xl"]
 maskgen_kl_generator = MaskGen_KL.from_pretrained("turkeyju/generator_maskgen_kl_xl")
 maskgen_kl_generator.eval()
 maskgen_kl_generator.requires_grad_(False)
@@ -168,7 +187,9 @@ clip_encoder.eval()
 clip_encoder.requires_grad_(False)
 
 device = "cuda"
-tatitok_tokenizer = tatitok_tokenizer.to(device)
+tatitok_vq_tokenizer = tatitok_vq_tokenizer.to(device)
+tatitok_kl_tokenizer = tatitok_kl_tokenizer.to(device)
+maskgen_vq_generator = maskgen_vq_generator.to(device)
 maskgen_kl_generator = maskgen_kl_generator.to(device)
 clip_encoder = clip_encoder.to(device)
 
@@ -183,13 +204,18 @@ text_guidance = clip_encoder.transformer(text_guidance, attn_mask=clip_encoder.a
 text_guidance = text_guidance.permute(1, 0, 2)  # LND -> NLD
 text_guidance = clip_encoder.ln_final(text_guidance)  # [batch_size, n_ctx, transformer.width]
 
-generated_tokens = maskgen_kl_generator.sample_tokens(1, clip_tokenizer, clip_encoder, num_iter=32, cfg=3.0, aes_scores=6.5, captions=text)
+vq_generated_tokens = maskgen_vq_generator.generate(captions=text, guidance_scale=12.0, randomize_temperature=2.0, sample_aesthetic_score=6.5, clip_tokenizer=clip_tokenizer, clip_encoder=clip_encoder)
+kl_generated_tokens = maskgen_kl_generator.sample_tokens(1, clip_tokenizer, clip_encoder, num_iter=32, cfg=3.0, aes_scores=6.5, captions=text)
 
 # de-tokenization
-reconstructed_image = tatitok_tokenizer.decode_tokens(generated_tokens, text_guidance)
-reconstructed_image = torch.clamp(reconstructed_image, 0.0, 1.0)
-reconstructed_image = (reconstructed_image * 255.0).permute(0, 2, 3, 1).to("cpu", dtype=torch.uint8).numpy()[0]
-reconstructed_image = Image.fromarray(reconstructed_image).save("assets/maskgen_kl_generator_generated.png")
+vq_generated_image = tatitok_vq_tokenizer.decode_tokens(vq_generated_tokens, text_guidance)
+kl_generated_image = tatitok_kl_tokenizer.decode_tokens(kl_generated_tokens, text_guidance)
+vq_generated_image = torch.clamp(vq_generated_image, 0.0, 1.0)
+kl_generated_image = torch.clamp(kl_generated_image, 0.0, 1.0)
+vq_generated_image = (vq_generated_image * 255.0).permute(0, 2, 3, 1).to("cpu", dtype=torch.uint8).numpy()[0]
+kl_generated_image = (kl_generated_image * 255.0).permute(0, 2, 3, 1).to("cpu", dtype=torch.uint8).numpy()[0]
+vq_generated_image = Image.fromarray(vq_generated_image).save("assets/maskgen_vq_generator_generated.png")
+kl_generated_image = Image.fromarray(kl_generated_image).save("assets/maskgen_kl_generator_generated.png")
 ```
 
 ## Training Preparation

@@ -7,9 +7,9 @@ model:
     quantize_mode: vq
     codebook_size: 8192
     token_size: 64
-    use_l2_norm: false
+    use_l2_norm: False
     commitment_cost: 0.25
-    clustering_vq: true
+    clustering_vq: False
     vit_enc_model_size: base
     vit_dec_model_size: large
     vit_enc_patch_size: 16
@@ -21,7 +21,7 @@ model:
     decoder_embed_dim: 1024
     decoder_depth: 16
     decoder_num_heads: 16
-    micro_condition: true
+    micro_condition: True
     micro_condition_embed_dim: 256
     text_drop_prob: 0.1
     condition_num_classes: 1000
